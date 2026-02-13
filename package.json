@@ -1,11 +1,16 @@
 {
-  "name": "lazy-render",
-  "version": "0.1.0",
+  "name": "lazy-render-virtual-scroll",
+  "version": "1.0.4",
   "description": "A framework-agnostic virtual scrolling and lazy rendering solution",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
@@ -29,12 +34,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sannu/lazy-render.git"
+    "url": "https://github.com/sannuk79/lezzyrender.git"
   },
   "bugs": {
-    "url": "https://github.com/sannu/lazy-render/issues"
+    "url": "https://github.com/sannuk79/lezzyrender/issues"
   },
-  "homepage": "https://github.com/sannu/lazy-render#readme",
+  "homepage": "https://github.com/sannuk79/lezzyrender#readme",
   "peerDependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

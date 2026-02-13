@@ -36,31 +36,31 @@ A framework-agnostic virtual scrolling and lazy rendering solution that efficien
 ## Installation
 
 ```bash
-npm install lazy-render
+npm install lazy-render-virtual-scroll
 ```
 
-## Quick Start - Hinglish Guide
+## Quick Start - English Guide
 
-### React Adapter Ka Istemal
+### React Adapter Usage
 
 ```tsx
 import React, { useState } from 'react';
-import { LazyList } from 'lazy-render';
+import { LazyList } from 'lazy-render-virtual-scroll';
 
 const MyComponent = () => {
   const [items, setItems] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(true);
 
-  // Data fetch karne ka function
+  // Function to fetch data
   const fetchMore = async () => {
-    // API call simulate kar rahe hain
+    // Simulate API call
     const newItems = await fetchItems(items.length, 20);
     setItems(prev => [...prev, ...newItems]);
     setHasMore(newItems.length > 0);
     return newItems;
   };
 
-  // Har item ko render karne ka function
+  // Function to render each item
   const renderItem = (item: any, index: number) => (
     <div style={{ height: '50px', borderBottom: '1px solid #eee' }}>
       Item {index}: {item.name}
@@ -69,11 +69,11 @@ const MyComponent = () => {
 
   return (
     <LazyList
-      items={items}           // Tumhara data array
-      itemHeight={50}         // Har item ki height
-      viewportHeight={400}    // Container ki visible height
-      fetchMore={fetchMore}   // Data fetch karne ka function
-      renderItem={renderItem} // Item render karne ka function
+      items={items}           // Your data array
+      itemHeight={50}         // Height of each item
+      viewportHeight={400}    // Visible height of container
+      fetchMore={fetchMore}   // Function to fetch data
+      renderItem={renderItem} // Function to render items
       bufferSize={5}          // Buffer items (extra render)
       overscan={2}            // Additional buffer for smooth scrolling
     />
@@ -81,11 +81,11 @@ const MyComponent = () => {
 };
 ```
 
-### Hook Ka Istemal
+### Hook Usage
 
 ```tsx
 import React, { useState } from 'react';
-import { useLazyList } from 'lazy-render';
+import { useLazyList } from 'lazy-render-virtual-scroll';
 
 const MyCustomComponent = () => {
   const [items, setItems] = useState<any[]>([]);
@@ -108,21 +108,21 @@ const MyCustomComponent = () => {
     }
   });
 
-  // Sirf visible items ko nikal rahe hain
+  // Extract only visible items
   const visibleItems = items.slice(visibleRange.start, visibleRange.end);
 
   return (
     <div 
-      ref={setContainerRef}  // Scroll detection ke liye
+      ref={setContainerRef}  // For scroll detection
       style={{ 
         height: '400px', 
         overflowY: 'auto' 
       }}
     >
-      {/* Top padding for scroll position maintain karne ke liye */}
+      {/* Top padding to maintain scroll position */}
       <div style={{ height: `${visibleRange.start * 50}px` }} />
       
-      {/* Visible items render */}
+      {/* Render visible items */}
       {visibleItems.map((item, index) => (
         <div
           key={visibleRange.start + index}
@@ -156,39 +156,39 @@ const MyCustomComponent = () => {
 };
 ```
 
-## Package Kaise Kam Karta Hai - Step by Step
+## How Package Works - Step by Step
 
-### 1. Install Karo
+### 1. Install
 ```bash
 npm install lazy-render
 ```
 
-### 2. Import Karo
+### 2. Import
 ```javascript
-import { LazyList, useLazyList } from 'lazy-render';
+import { LazyList, useLazyList } from 'lazy-render-virtual-scroll';
 ```
 
 ### 3. Basic Usage
-- Tumhara data array lelo
-- Item ki height batado
-- Container ki height batado
-- FetchMore function provide karo
-- RenderItem function provide karo
+- Get your data array
+- Specify item height
+- Specify container height
+- Provide fetchMore function
+- Provide renderItem function
 
 ### 4. How It Works Internally
-- **Scroll Detection**: User scroll karta hai toh detect hota hai
-- **Range Calculation**: Visible range calculate hota hai (kitne items dikh rahe hain)
-- **Smart Rendering**: Sirf visible items render hote hain
-- **Prefetch Logic**: User end tak pahunchne se pehle data fetch hota hai
-- **Memory Cleanup**: Off-screen items remove ho jaate hain
+- **Scroll Detection**: Detects when user scrolls
+- **Range Calculation**: Calculates visible range (which items are visible)
+- **Smart Rendering**: Only renders visible items
+- **Prefetch Logic**: Fetches data before user reaches the end
+- **Memory Cleanup**: Removes off-screen items
 
 ### 5. Configuration Options
-- `itemHeight`: Har item ki height in pixels
-- `viewportHeight`: Container ki visible height
-- `bufferSize`: Extra items render (default: 5)
+- `itemHeight`: Height of each item in pixels
+- `viewportHeight`: Visible height of container
+- `bufferSize`: Extra items to render (default: 5)
 - `overscan`: Additional buffer for smooth scrolling (default: 2)
-- `fetchMore`: Data fetch karne ka function
-- `renderItem`: Item render karne ka function
+- `fetchMore`: Function to fetch data
+- `renderItem`: Function to render items
 
 ### 6. Hook Return Values
 - `visibleRange`: Currently visible items range
@@ -242,30 +242,29 @@ const state = engine.getState();
 
 ## Performance Benefits
 
-1. **Efficient Rendering**: Sirf visible items render hote hain
-2. **Memory Management**: Unnecessary items remove ho jaate hain
-3. **Smart Prefetch**: Data提前 load hota hai
-4. **Smooth Scrolling**: Lag nahi aati
-
-## Performance Benefits
-
-1. **Efficient Rendering**: Sirf visible items render hote hain
-2. **Memory Management**: Unnecessary items remove ho jaate hain
-3. **Smart Prefetch**: Data提前 load hota hai
+1. **Efficient Rendering**: Only visible items are rendered
+2. **Memory Management**: Unnecessary items are removed from memory
+3. **Smart Prefetch**: Data loads ahead of user scroll
 4. **Smooth Scrolling**: Overscan provides seamless experience
+
+## Installation
+
+```bash
+npm i lazy-render-virtual-scroll
+```
 
 ## When to Use lazy-render
 
 ### Use when:
-- 1000+ items ko render karna hai
-- Infinite scroll functionality chahiye
+- Rendering 1000+ items
+- Need infinite scroll functionality
 - Dashboard widgets with large data sets
 - Chat applications with message history
 - Feed applications with posts/comments
 - Any scenario with large data that needs smooth scrolling
 
 ### Avoid when:
-- Less than 100 items ko render karna hai
+- Rendering less than 100 items
 - Static content with no scrolling
 - Simple pages without performance concerns
 
@@ -280,10 +279,10 @@ const state = engine.getState();
 
 ## Performance Tips
 
-1. Consistent item heights use karo for best performance
-2. Buffer size adjust karo content complexity ke hisab se
-3. Proper error handling implement karo
-4. Skeleton loaders use karo better UX ke liye
+1. Use consistent item heights for best performance
+2. Adjust buffer size based on content complexity
+3. Implement proper error handling
+4. Use skeleton loaders for better UX
 5. Use overscan for smoother scrolling experience
 
 ## Examples

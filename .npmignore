@@ -1,0 +1,22 @@
+# Source files - don't publish these to npm
+src/
+test/
+examples/
+node_modules/
+.git/
+.github/
+.gitignore
+.npmignore
+tsconfig.json
+rollup.config.js
+package-lock.json
+CHANGELOG.md
+CONTRIBUTING.md
+*.test.*
+*.spec.*
+
+# Only include these files in the npm package
+!dist/
+!README.md
+!package.json
+!LICENSE
