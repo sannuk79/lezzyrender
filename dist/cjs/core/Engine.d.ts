@@ -1,0 +1,48 @@
+import { EngineConfig, VisibleRange, FetchMoreCallback, EngineState } from './types';
+export declare class Engine {
+    private config;
+    private windowManager;
+    private prefetchManager;
+    private requestQueue;
+    private state;
+    private fetchMoreCallback;
+    private totalItems;
+    constructor(config: EngineConfig);
+    /**
+     * Update scroll position and recalculate visible range
+     */
+    updateScrollPosition(scrollTop: number): void;
+    /**
+     * Get the current visible range
+     */
+    getVisibleRange(): VisibleRange;
+    /**
+     * Check if more items should be fetched
+     */
+    shouldFetchMore(): boolean;
+    /**
+     * Fetch more items
+     */
+    fetchMore(): Promise<void>;
+    /**
+     * Set the fetchMore callback function
+     */
+    setFetchMoreCallback(callback: FetchMoreCallback): void;
+    /**
+     * Update total items count
+     */
+    updateTotalItems(count: number): void;
+    /**
+     * Get current engine state
+     */
+    getState(): EngineState;
+    /**
+     * Update viewport dimensions
+     */
+    updateDimensions(viewportHeight: number, itemHeight: number): void;
+    /**
+     * Cleanup resources
+     */
+    cleanup(): void;
+}
+//# sourceMappingURL=Engine.d.ts.map

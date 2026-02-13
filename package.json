@@ -1,0 +1,55 @@
+{
+  "name": "lazy-render",
+  "version": "0.1.0",
+  "description": "A framework-agnostic virtual scrolling and lazy rendering solution",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "npx tsx test/testRunner.ts",
+    "test:verbose": "npx tsx test/testRunner.ts",
+    "lint": "eslint src --ext .ts,.tsx",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "virtual-scrolling",
+    "lazy-rendering",
+    "performance",
+    "react",
+    "vue",
+    "angular",
+    "scrolling",
+    "infinite-scroll",
+    "pagination"
+  ],
+  "author": "Sannu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sannu/lazy-render.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sannu/lazy-render/issues"
+  },
+  "homepage": "https://github.com/sannu/lazy-render#readme",
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "rollup": "^3.0.0",
+    "rollup-plugin-dts": "^6.0.0",
+    "tslib": "^2.4.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "tsx": "^4.0.0"
+  }
+}

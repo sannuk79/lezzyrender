@@ -1,0 +1,1 @@
+{"version":3,"file":"useLazyList.d.ts","sourceRoot":"","sources":["../../../src/adapters/react/useLazyList.ts"],"names":[],"mappings":"AAEA,OAAO,EAAE,YAAY,EAAE,YAAY,EAAE,iBAAiB,EAAE,MAAM,kBAAkB,CAAC;AAEjF,UAAU,cAAe,SAAQ,YAAY;IAC3C,SAAS,EAAE,iBAAiB,CAAC;CAC9B;AAED,eAAO,MAAM,WAAW,GAAI,QAAQ,cAAc;;;;+BA4Cd,WAAW,GAAG,IAAI;;CAkCrD,CAAC"}
