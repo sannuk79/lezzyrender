@@ -19,18 +19,30 @@ interface EngineState {
     loadedItems: number;
     isLoading: boolean;
 }
+interface ScrollAnalysis {
+    velocity: number;
+    direction: 'up' | 'down' | 'stationary';
+    buffer: number;
+    prefetchDistance: number;
+    predictedPosition: number;
+    isIdle: boolean;
+}
 
 declare class Engine {
     private config;
     private windowManager;
     private prefetchManager;
     private requestQueue;
+    private intelligentScrollDetector;
+    private networkDetector;
+    private networkAwarePrefetchManager;
+    private networkAwareRequestQueue;
     private state;
     private fetchMoreCallback;
     private totalItems;
     constructor(config: EngineConfig);
     /**
-     * Update scroll position and recalculate visible range
+     * Update scroll position and recalculate visible range with intelligent detection
      */
     updateScrollPosition(scrollTop: number): void;
     /**
@@ -38,11 +50,11 @@ declare class Engine {
      */
     getVisibleRange(): VisibleRange;
     /**
-     * Check if more items should be fetched
+     * Check if more items should be fetched with intelligent and network-aware detection
      */
-    shouldFetchMore(): boolean;
+    shouldFetchMore(): Promise<boolean>;
     /**
-     * Fetch more items
+     * Fetch more items with network awareness
      */
     fetchMore(): Promise<void>;
     /**
@@ -84,17 +96,24 @@ declare class WindowManager {
      * Update item height if it changes
      */
     updateItemHeight(height: number): void;
+    /**
+     * Update buffer size if it changes
+     */
+    updateBufferSize(size: number): void;
 }
 
 declare class PrefetchManager {
-    private bufferSize;
-    constructor(bufferSize?: number);
     /**
-     * Determine if more items should be fetched based on visible range and loaded items
+     * This class is kept for backward compatibility
+     * Intelligent prefetching is now handled in the Engine class
+     */
+    constructor();
+    /**
+     * Legacy method - not used in intelligent mode
      */
     shouldPrefetch(visibleEnd: number, totalLoaded: number): boolean;
     /**
-     * Update buffer size if it changes
+     * Update buffer size if it changes (for backward compatibility)
      */
     updateBufferSize(size: number): void;
 }
@@ -120,6 +139,69 @@ declare class RequestQueue {
      * Get the current queue length
      */
     getLength(): number;
+}
+
+declare class IntelligentScrollDetector {
+    private lastScrollTop;
+    private lastTime;
+    private velocityHistory;
+    private readonly HISTORY_SIZE;
+    private scrollTimeout;
+    private isIdle;
+    constructor();
+    calculateVelocity(scrollTop: number): number;
+    private getAverageVelocity;
+    getDirection(velocity: number): 'up' | 'down' | 'stationary';
+    calculateBuffer(velocity: number): number;
+    calculatePrefetchDistance(velocity: number): number;
+    predictPosition(currentPosition: number, velocity: number, msAhead?: number): number;
+    getIsIdle(): boolean;
+    private resetIdleTimer;
+    cleanup(): void;
+}
+
+declare class NetworkSpeedDetector {
+    private bandwidthHistory;
+    private latencyHistory;
+    private readonly HISTORY_SIZE;
+    estimateBandwidth(): Promise<number>;
+    measureLatency(): Promise<number>;
+    assessConnectionQuality(): Promise<'excellent' | 'good' | 'poor' | 'offline'>;
+    private getAverageBandwidth;
+    private getAverageLatency;
+    getNetworkStats(): {
+        bandwidth: number;
+        latency: number;
+        history: number[];
+    };
+}
+
+declare class NetworkAwarePrefetchManager {
+    private networkDetector;
+    private basePrefetchDistance;
+    constructor(networkDetector: NetworkSpeedDetector);
+    calculateNetworkAdjustedPrefetch(velocity: number): Promise<number>;
+    calculateNetworkAdjustedBatchSize(velocity: number): Promise<number>;
+    shouldDelayPrefetch(): Promise<boolean>;
+}
+
+declare class NetworkAwareRequestQueue {
+    private networkDetector;
+    private queue;
+    private processing;
+    private maxConcurrent;
+    private offlineQueue;
+    constructor(networkDetector: NetworkSpeedDetector);
+    add(requestFn: () => Promise<any>): Promise<any>;
+    private processQueue;
+    private handleOfflineRequest;
+    private processOfflineQueue;
+    getQueueStatus(): {
+        pending: number;
+        offline: number;
+        maxConcurrent: number;
+    };
+    clear(): void;
 }
 
 declare class ScrollObserver {
@@ -154,8 +236,17 @@ declare const useLazyList: (config: LazyListConfig) => {
     visibleRange: VisibleRange;
     loadedItems: any[];
     isLoading: boolean;
+    scrollAnalysis: ScrollAnalysis;
     setContainerRef: (element: HTMLElement | null) => (() => void) | undefined;
     refresh: () => void;
+    getScrollAnalysis: () => {
+        velocity: number;
+        direction: string;
+        buffer: number;
+        prefetchDistance: number;
+        predictedPosition: number;
+        isIdle: boolean;
+    };
 };
 
 interface LazyListProps extends EngineConfig {
@@ -177,5 +268,5 @@ declare function debounce<T extends (...args: any[]) => any>(func: T, wait: numb
  */
 declare function throttle<T extends (...args: any[]) => any>(func: T, limit: number): (...args: Parameters<T>) => void;
 
-export { Engine, LazyList, PrefetchManager, RequestQueue, ScrollObserver, WindowManager, debounce, throttle, useLazyList };
-export type { EngineConfig, EngineState, FetchMoreCallback, VisibleRange };
+export { Engine, IntelligentScrollDetector, LazyList, NetworkAwarePrefetchManager, NetworkAwareRequestQueue, NetworkSpeedDetector, PrefetchManager, RequestQueue, ScrollObserver, WindowManager, debounce, throttle, useLazyList };
+export type { EngineConfig, EngineState, FetchMoreCallback, ScrollAnalysis, VisibleRange };

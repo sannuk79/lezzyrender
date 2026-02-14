@@ -2,12 +2,20 @@ import { EngineConfig, VisibleRange, FetchMoreCallback, EngineState } from './ty
 import { WindowManager } from './WindowManager';
 import { PrefetchManager } from './PrefetchManager';
 import { RequestQueue } from './RequestQueue';
+import { IntelligentScrollDetector } from './IntelligentScrollDetector';
+import { NetworkSpeedDetector } from './NetworkSpeedDetector';
+import { NetworkAwarePrefetchManager } from './NetworkAwarePrefetchManager';
+import { NetworkAwareRequestQueue } from './NetworkAwareRequestQueue';
 
 export class Engine {
   private config: EngineConfig;
   private windowManager: WindowManager;
   private prefetchManager: PrefetchManager;
   private requestQueue: RequestQueue;
+  private intelligentScrollDetector: IntelligentScrollDetector;
+  private networkDetector: NetworkSpeedDetector;
+  private networkAwarePrefetchManager: NetworkAwarePrefetchManager;
+  private networkAwareRequestQueue: NetworkAwareRequestQueue;
   
   private state: EngineState;
   private fetchMoreCallback: FetchMoreCallback | null = null;
@@ -27,6 +35,10 @@ export class Engine {
     
     this.prefetchManager = new PrefetchManager(this.config.bufferSize);
     this.requestQueue = new RequestQueue(1); // Single request at a time
+    this.intelligentScrollDetector = new IntelligentScrollDetector();
+    this.networkDetector = new NetworkSpeedDetector();
+    this.networkAwarePrefetchManager = new NetworkAwarePrefetchManager(this.networkDetector);
+    this.networkAwareRequestQueue = new NetworkAwareRequestQueue(this.networkDetector);
     
     this.totalItems = this.config.totalItems || Number.MAX_SAFE_INTEGER;
     
@@ -39,9 +51,19 @@ export class Engine {
   }
 
   /**
-   * Update scroll position and recalculate visible range
+   * Update scroll position and recalculate visible range with intelligent detection
    */
   updateScrollPosition(scrollTop: number): void {
+    // Calculate velocity and other intelligent metrics
+    const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
+    const direction = this.intelligentScrollDetector.getDirection(velocity);
+    
+    // Calculate adaptive buffer based on scroll behavior
+    const adaptiveBuffer = this.intelligentScrollDetector.calculateBuffer(velocity);
+    
+    // Update window manager with adaptive buffer
+    this.windowManager.updateBufferSize(adaptiveBuffer);
+    
     this.state.scrollTop = scrollTop;
     this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
     
@@ -59,21 +81,29 @@ export class Engine {
   }
 
   /**
-   * Check if more items should be fetched
+   * Check if more items should be fetched with intelligent and network-aware detection
    */
-  shouldFetchMore(): boolean {
+  async shouldFetchMore(): Promise<boolean> {
     if (!this.fetchMoreCallback) return false;
     if (this.state.isLoading) return false;
     if (this.state.loadedItems >= this.totalItems) return false;
     
-    return this.prefetchManager.shouldPrefetch(
-      this.state.visibleRange.end,
-      this.state.loadedItems
-    );
+    // Get current velocity for intelligent prefetching
+    const velocity = this.intelligentScrollDetector.calculateVelocity(this.state.scrollTop);
+    
+    // Calculate network-adjusted prefetch distance
+    const prefetchDistance = await this.networkAwarePrefetchManager.calculateNetworkAdjustedPrefetch(velocity);
+    
+    // Use intelligent prefetch logic
+    const visibleEnd = this.state.visibleRange.end;
+    const totalLoaded = this.state.loadedItems;
+    
+    // Intelligent prefetch: if visible end is approaching the loaded boundary
+    return visibleEnd >= totalLoaded - prefetchDistance;
   }
 
   /**
-   * Fetch more items
+   * Fetch more items with network awareness
    */
   async fetchMore(): Promise<void> {
     if (!this.fetchMoreCallback || this.state.isLoading) return;
@@ -81,7 +111,8 @@ export class Engine {
     this.state.isLoading = true;
     
     try {
-      const result = await this.requestQueue.add(this.fetchMoreCallback);
+      // Use network-aware request queue
+      const result = await this.networkAwareRequestQueue.add(this.fetchMoreCallback);
       // Assuming the result contains new items
       // In a real implementation, this would update the loaded items count
       this.state.loadedItems += Array.isArray(result) ? result.length : 1;
@@ -129,6 +160,8 @@ export class Engine {
    */
   cleanup(): void {
     this.requestQueue.clear();
+    this.networkAwareRequestQueue.clear();
     this.fetchMoreCallback = null;
+    this.intelligentScrollDetector.cleanup();
   }
 }

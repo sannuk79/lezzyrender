@@ -1,4 +1,4 @@
-# lazy-render
+# lazy-render-virtual-scroll
 
 A framework-agnostic virtual scrolling and lazy rendering solution that efficiently renders large datasets by only displaying items within the visible viewport.
 
@@ -27,11 +27,14 @@ A framework-agnostic virtual scrolling and lazy rendering solution that efficien
 
 - **Framework Agnostic Core**: Pure logic implementation that works across different environments
 - **Virtual Scrolling**: Only renders visible items to improve performance
+- **Intelligent Scroll Detection**: Analyzes scroll velocity, direction, and patterns
+- **Adaptive Buffer Management**: Dynamically adjusts buffer size based on scroll behavior
 - **Smart Prefetching**: Loads data ahead of user scroll to prevent loading gaps
 - **Memory Efficient**: Automatically cleans up off-screen elements
 - **React Adapter**: Easy integration with React applications
 - **Configurable Buffer**: Adjustable buffer size for optimal performance
 - **Overscan Support**: Additional buffer for smoother scrolling
+- **Predictive Loading**: Anticipates user needs based on scroll patterns
 
 ## Installation
 

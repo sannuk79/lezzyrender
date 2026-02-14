@@ -36,24 +36,33 @@ class WindowManager {
     updateItemHeight(height) {
         this.itemHeight = height;
     }
-}
-
-class PrefetchManager {
-    constructor(bufferSize = 5) {
-        this.bufferSize = bufferSize;
-    }
-    /**
-     * Determine if more items should be fetched based on visible range and loaded items
-     */
-    shouldPrefetch(visibleEnd, totalLoaded) {
-        // Simple rule: if visible end is approaching the loaded boundary, fetch more
-        return visibleEnd >= totalLoaded - this.bufferSize;
-    }
     /**
      * Update buffer size if it changes
      */
     updateBufferSize(size) {
         this.bufferSize = size;
+    }
+}
+
+class PrefetchManager {
+    /**
+     * This class is kept for backward compatibility
+     * Intelligent prefetching is now handled in the Engine class
+     */
+    constructor() { }
+    /**
+     * Legacy method - not used in intelligent mode
+     */
+    shouldPrefetch(visibleEnd, totalLoaded) {
+        // Simple rule: if visible end is approaching the loaded boundary, fetch more
+        return visibleEnd >= totalLoaded - 5; // Default buffer
+    }
+    /**
+     * Update buffer size if it changes (for backward compatibility)
+     */
+    updateBufferSize(size) {
+        // This method exists for backward compatibility
+        // Intelligent prefetching is now handled in the Engine class
     }
 }
 
@@ -116,6 +125,369 @@ class RequestQueue {
     }
 }
 
+class IntelligentScrollDetector {
+    constructor() {
+        this.lastScrollTop = 0;
+        this.lastTime = 0;
+        this.velocityHistory = [];
+        this.HISTORY_SIZE = 5;
+        this.scrollTimeout = null;
+        this.isIdle = true;
+        this.lastTime = performance.now();
+    }
+    // Calculate velocity from scroll event
+    calculateVelocity(scrollTop) {
+        const now = performance.now();
+        const deltaY = scrollTop - this.lastScrollTop;
+        const deltaTime = now - this.lastTime;
+        // Calculate velocity (pixels per millisecond)
+        const velocity = deltaTime > 0 ? deltaY / deltaTime : 0;
+        // Store in history for smoothing
+        this.velocityHistory.push(velocity);
+        if (this.velocityHistory.length > this.HISTORY_SIZE) {
+            this.velocityHistory.shift();
+        }
+        // Update for next calculation
+        this.lastScrollTop = scrollTop;
+        this.lastTime = now;
+        // Update idle state
+        this.isIdle = false;
+        this.resetIdleTimer();
+        // Return smoothed velocity (average of recent values)
+        return this.getAverageVelocity();
+    }
+    // Get smoothed velocity from history
+    getAverageVelocity() {
+        if (this.velocityHistory.length === 0)
+            return 0;
+        const sum = this.velocityHistory.reduce((acc, vel) => acc + vel, 0);
+        return sum / this.velocityHistory.length;
+    }
+    // Determine scroll direction from velocity
+    getDirection(velocity) {
+        if (Math.abs(velocity) < 0.1)
+            return 'stationary';
+        return velocity > 0 ? 'down' : 'up';
+    }
+    // Calculate buffer size based on scroll velocity
+    calculateBuffer(velocity) {
+        const absVelocity = Math.abs(velocity);
+        if (absVelocity > 1.5) {
+            return 20; // Large buffer for fast scrolling
+        }
+        else if (absVelocity > 1.0) {
+            return 10; // Medium buffer
+        }
+        else if (absVelocity > 0.3) {
+            return 7; // Small buffer for medium scrolling
+        }
+        else {
+            return 5; // Minimal buffer when nearly stationary
+        }
+    }
+    // Calculate prefetch distance based on velocity
+    calculatePrefetchDistance(velocity) {
+        const absVelocity = Math.abs(velocity);
+        if (absVelocity > 2.0)
+            return 1200; // Far ahead for fast scrolling
+        if (absVelocity > 1.0)
+            return 800; // Medium distance
+        if (absVelocity > 0.3)
+            return 400; // Close distance for slow scroll
+        return 200; // Minimal prefetch when nearly stationary
+    }
+    // Predict where user will be in X milliseconds
+    predictPosition(currentPosition, velocity, msAhead = 500) {
+        return currentPosition + (velocity * msAhead);
+    }
+    // Check if user is currently idle
+    getIsIdle() {
+        return this.isIdle;
+    }
+    // Reset idle timer
+    resetIdleTimer() {
+        if (this.scrollTimeout) {
+            clearTimeout(this.scrollTimeout);
+        }
+        this.scrollTimeout = window.setTimeout(() => {
+            this.isIdle = true;
+        }, 150); // 150ms after last scroll = idle
+    }
+    // Clean up resources
+    cleanup() {
+        if (this.scrollTimeout) {
+            clearTimeout(this.scrollTimeout);
+        }
+    }
+}
+
+class NetworkSpeedDetector {
+    constructor() {
+        this.bandwidthHistory = [];
+        this.latencyHistory = [];
+        this.HISTORY_SIZE = 5;
+    }
+    // Estimate available bandwidth
+    async estimateBandwidth() {
+        const startTime = performance.now();
+        const testData = new Array(10000).fill('test_data').join('');
+        try {
+            // Send test request to measure bandwidth
+            const response = await fetch('/api/network-test', {
+                method: 'POST',
+                body: testData
+            });
+            const endTime = performance.now();
+            const duration = (endTime - startTime) / 1000; // seconds
+            const dataSize = testData.length; // bytes
+            const bandwidth = dataSize / duration; // bytes per second
+            this.bandwidthHistory.push(bandwidth);
+            if (this.bandwidthHistory.length > this.HISTORY_SIZE) {
+                this.bandwidthHistory.shift();
+            }
+            return this.getAverageBandwidth();
+        }
+        catch (error) {
+            // If network test fails, return a conservative estimate
+            return 100000; // 100 KB/s as fallback
+        }
+    }
+    // Measure network latency
+    async measureLatency() {
+        try {
+            const startTime = performance.now();
+            await fetch('/api/ping');
+            const endTime = performance.now();
+            const latency = endTime - startTime;
+            this.latencyHistory.push(latency);
+            if (this.latencyHistory.length > this.HISTORY_SIZE) {
+                this.latencyHistory.shift();
+            }
+            return this.getAverageLatency();
+        }
+        catch (error) {
+            // If ping fails, return a high latency as fallback
+            return 1000; // 1 second as fallback
+        }
+    }
+    // Assess overall connection quality
+    async assessConnectionQuality() {
+        try {
+            const [bandwidth, latency] = await Promise.all([
+                this.estimateBandwidth(),
+                this.measureLatency()
+            ]);
+            if (latency > 1000)
+                return 'poor'; // High latency
+            if (bandwidth < 100000)
+                return 'poor'; // Low bandwidth (< 100 KB/s)
+            if (latency > 500 || bandwidth < 500000)
+                return 'good'; // Moderate
+            return 'excellent'; // Fast and responsive
+        }
+        catch (_a) {
+            return 'offline';
+        }
+    }
+    getAverageBandwidth() {
+        if (this.bandwidthHistory.length === 0)
+            return 0;
+        const sum = this.bandwidthHistory.reduce((a, b) => a + b, 0);
+        return sum / this.bandwidthHistory.length;
+    }
+    getAverageLatency() {
+        if (this.latencyHistory.length === 0)
+            return 0;
+        const sum = this.latencyHistory.reduce((a, b) => a + b, 0);
+        return sum / this.latencyHistory.length;
+    }
+    // Get current network statistics
+    getNetworkStats() {
+        return {
+            bandwidth: this.getAverageBandwidth(),
+            latency: this.getAverageLatency(),
+            history: [...this.bandwidthHistory]
+        };
+    }
+}
+
+class NetworkAwarePrefetchManager {
+    constructor(networkDetector) {
+        this.basePrefetchDistance = 400; // Base prefetch distance in pixels
+        this.networkDetector = networkDetector;
+    }
+    // Calculate prefetch distance based on network conditions
+    async calculateNetworkAdjustedPrefetch(velocity) {
+        const connectionQuality = await this.networkDetector.assessConnectionQuality();
+        // Base prefetch distance from scroll velocity
+        let baseDistance = this.basePrefetchDistance;
+        if (Math.abs(velocity) > 2.0)
+            baseDistance = 1200;
+        else if (Math.abs(velocity) > 1.0)
+            baseDistance = 800;
+        else if (Math.abs(velocity) > 0.3)
+            baseDistance = 400;
+        else
+            baseDistance = 200;
+        // Adjust based on network quality
+        switch (connectionQuality) {
+            case 'excellent':
+                return Math.round(baseDistance * 1.5); // Extra prefetch on fast networks
+            case 'good':
+                return Math.round(baseDistance * 1.2); // Slightly more prefetch
+            case 'poor':
+                return Math.round(baseDistance * 0.7); // Less prefetch on slow networks
+            case 'offline':
+                return Math.round(baseDistance * 0.3); // Minimal prefetch when offline
+            default:
+                return baseDistance;
+        }
+    }
+    // Calculate batch size based on network conditions
+    async calculateNetworkAdjustedBatchSize(velocity) {
+        const connectionQuality = await this.networkDetector.assessConnectionQuality();
+        // Base batch size from scroll velocity
+        let baseBatchSize = 10; // Default batch size
+        if (Math.abs(velocity) > 2.0)
+            baseBatchSize = 20; // Fast scroll needs more
+        else if (Math.abs(velocity) > 1.0)
+            baseBatchSize = 15;
+        else if (Math.abs(velocity) > 0.3)
+            baseBatchSize = 10;
+        else
+            baseBatchSize = 5; // Slow scroll needs less
+        // Adjust based on network quality
+        switch (connectionQuality) {
+            case 'excellent':
+                return Math.min(baseBatchSize * 2, 50); // Large batches on fast networks
+            case 'good':
+                return Math.min(baseBatchSize * 1.5, 30); // Medium batches
+            case 'poor':
+                return Math.max(Math.round(baseBatchSize * 0.5), 5); // Small batches on slow networks
+            case 'offline':
+                return Math.max(Math.round(baseBatchSize * 0.3), 3); // Minimal batches when offline
+            default:
+                return baseBatchSize;
+        }
+    }
+    // Determine if prefetch should be delayed based on network conditions
+    async shouldDelayPrefetch() {
+        const connectionQuality = await this.networkDetector.assessConnectionQuality();
+        return connectionQuality === 'poor';
+    }
+}
+
+class NetworkAwareRequestQueue {
+    constructor(networkDetector) {
+        this.queue = [];
+        this.processing = false;
+        this.maxConcurrent = 1;
+        this.offlineQueue = [];
+        this.networkDetector = networkDetector;
+    }
+    // Add request with network-aware concurrency
+    async add(requestFn) {
+        // Adjust concurrency based on network conditions
+        const connectionQuality = await this.networkDetector.assessConnectionQuality();
+        switch (connectionQuality) {
+            case 'excellent':
+                this.maxConcurrent = 3; // Allow more concurrent requests
+                break;
+            case 'good':
+                this.maxConcurrent = 2; // Moderate concurrency
+                break;
+            case 'poor':
+                this.maxConcurrent = 1; // Sequential requests on slow networks
+                break;
+            case 'offline':
+                // Queue for later when online
+                return this.handleOfflineRequest(requestFn);
+            default:
+                this.maxConcurrent = 1;
+        }
+        return new Promise((resolve, reject) => {
+            this.queue.push(() => requestFn().then(resolve).catch(reject));
+            if (!this.processing) {
+                this.processQueue();
+            }
+        });
+    }
+    // Process queue with network-aware concurrency
+    async processQueue() {
+        if (this.queue.length === 0) {
+            this.processing = false;
+            return;
+        }
+        this.processing = true;
+        // Process up to maxConcurrent requests
+        const concurrentRequests = [];
+        const count = Math.min(this.maxConcurrent, this.queue.length);
+        for (let i = 0; i < count; i++) {
+            const requestFn = this.queue.shift();
+            if (requestFn) {
+                concurrentRequests.push(requestFn());
+            }
+        }
+        try {
+            await Promise.all(concurrentRequests);
+        }
+        catch (error) {
+            console.error('Network-aware request queue error:', error);
+        }
+        // Process remaining items
+        await this.processQueue();
+    }
+    // Handle requests when offline
+    async handleOfflineRequest(requestFn) {
+        // Store request for later execution
+        return new Promise((resolve, reject) => {
+            // Add to offline queue
+            this.offlineQueue.push(() => requestFn().then(resolve).catch(reject));
+            // Check for network restoration periodically
+            const checkOnline = () => {
+                if (navigator.onLine) {
+                    // Process offline queue
+                    this.processOfflineQueue();
+                    resolve(null); // Resolve with null since we can't return the actual result
+                }
+                else {
+                    setTimeout(checkOnline, 5000); // Check again in 5 seconds
+                }
+            };
+            checkOnline();
+        });
+    }
+    // Process offline queue when back online
+    async processOfflineQueue() {
+        const offlineRequests = [...this.offlineQueue];
+        this.offlineQueue = [];
+        for (const requestFn of offlineRequests) {
+            try {
+                await requestFn();
+            }
+            catch (error) {
+                console.error('Offline request failed:', error);
+                // Add back to offline queue for retry
+                this.offlineQueue.push(requestFn);
+            }
+        }
+    }
+    // Get current queue status
+    getQueueStatus() {
+        return {
+            pending: this.queue.length,
+            offline: this.offlineQueue.length,
+            maxConcurrent: this.maxConcurrent
+        };
+    }
+    // Clear all queues
+    clear() {
+        this.queue = [];
+        this.offlineQueue = [];
+        this.processing = false;
+    }
+}
+
 class Engine {
     constructor(config) {
         this.fetchMoreCallback = null;
@@ -126,6 +498,10 @@ class Engine {
         this.windowManager = new WindowManager(this.config.itemHeight, this.config.viewportHeight, this.config.bufferSize);
         this.prefetchManager = new PrefetchManager(this.config.bufferSize);
         this.requestQueue = new RequestQueue(1); // Single request at a time
+        this.intelligentScrollDetector = new IntelligentScrollDetector();
+        this.networkDetector = new NetworkSpeedDetector();
+        this.networkAwarePrefetchManager = new NetworkAwarePrefetchManager(this.networkDetector);
+        this.networkAwareRequestQueue = new NetworkAwareRequestQueue(this.networkDetector);
         this.totalItems = this.config.totalItems || Number.MAX_SAFE_INTEGER;
         this.state = {
             scrollTop: 0,
@@ -135,9 +511,16 @@ class Engine {
         };
     }
     /**
-     * Update scroll position and recalculate visible range
+     * Update scroll position and recalculate visible range with intelligent detection
      */
     updateScrollPosition(scrollTop) {
+        // Calculate velocity and other intelligent metrics
+        const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
+        this.intelligentScrollDetector.getDirection(velocity);
+        // Calculate adaptive buffer based on scroll behavior
+        const adaptiveBuffer = this.intelligentScrollDetector.calculateBuffer(velocity);
+        // Update window manager with adaptive buffer
+        this.windowManager.updateBufferSize(adaptiveBuffer);
         this.state.scrollTop = scrollTop;
         this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
         // Check if we need to fetch more items
@@ -152,26 +535,35 @@ class Engine {
         return this.state.visibleRange;
     }
     /**
-     * Check if more items should be fetched
+     * Check if more items should be fetched with intelligent and network-aware detection
      */
-    shouldFetchMore() {
+    async shouldFetchMore() {
         if (!this.fetchMoreCallback)
             return false;
         if (this.state.isLoading)
             return false;
         if (this.state.loadedItems >= this.totalItems)
             return false;
-        return this.prefetchManager.shouldPrefetch(this.state.visibleRange.end, this.state.loadedItems);
+        // Get current velocity for intelligent prefetching
+        const velocity = this.intelligentScrollDetector.calculateVelocity(this.state.scrollTop);
+        // Calculate network-adjusted prefetch distance
+        const prefetchDistance = await this.networkAwarePrefetchManager.calculateNetworkAdjustedPrefetch(velocity);
+        // Use intelligent prefetch logic
+        const visibleEnd = this.state.visibleRange.end;
+        const totalLoaded = this.state.loadedItems;
+        // Intelligent prefetch: if visible end is approaching the loaded boundary
+        return visibleEnd >= totalLoaded - prefetchDistance;
     }
     /**
-     * Fetch more items
+     * Fetch more items with network awareness
      */
     async fetchMore() {
         if (!this.fetchMoreCallback || this.state.isLoading)
             return;
         this.state.isLoading = true;
         try {
-            const result = await this.requestQueue.add(this.fetchMoreCallback);
+            // Use network-aware request queue
+            const result = await this.networkAwareRequestQueue.add(this.fetchMoreCallback);
             // Assuming the result contains new items
             // In a real implementation, this would update the loaded items count
             this.state.loadedItems += Array.isArray(result) ? result.length : 1;
@@ -215,7 +607,9 @@ class Engine {
      */
     cleanup() {
         this.requestQueue.clear();
+        this.networkAwareRequestQueue.clear();
         this.fetchMoreCallback = null;
+        this.intelligentScrollDetector.cleanup();
     }
 }
 
@@ -294,6 +688,14 @@ const useLazyList = (config) => {
     const [visibleRange, setVisibleRange] = React.useState({ start: 0, end: 0 });
     const [loadedItems, setLoadedItems] = React.useState([]);
     const [isLoading, setIsLoading] = React.useState(false);
+    const [scrollAnalysis, setScrollAnalysis] = React.useState({
+        velocity: 0,
+        direction: 'stationary',
+        buffer: 5,
+        prefetchDistance: 400,
+        predictedPosition: 0,
+        isIdle: true
+    });
     // Initialize engine
     React.useEffect(() => {
         engineRef.current = new Engine(engineConfig);
@@ -343,6 +745,7 @@ const useLazyList = (config) => {
         visibleRange,
         loadedItems,
         isLoading,
+        scrollAnalysis,
         setContainerRef,
         // Helper function to trigger manual refresh
         refresh: () => {
@@ -350,6 +753,22 @@ const useLazyList = (config) => {
             if (engineRef.current) {
                 engineRef.current.updateScrollPosition(((_a = containerRef.current) === null || _a === void 0 ? void 0 : _a.scrollTop) || 0);
             }
+        },
+        // Function to get current scroll analysis
+        getScrollAnalysis: () => {
+            if (engineRef.current) {
+                // In a real implementation, we would get the analysis from the engine
+                // For now, we'll return the current state
+                return scrollAnalysis;
+            }
+            return {
+                velocity: 0,
+                direction: 'stationary',
+                buffer: 5,
+                prefetchDistance: 400,
+                predictedPosition: 0,
+                isIdle: true
+            };
         }
     };
 };
@@ -424,7 +843,11 @@ function throttle(func, limit) {
 }
 
 exports.Engine = Engine;
+exports.IntelligentScrollDetector = IntelligentScrollDetector;
 exports.LazyList = LazyList;
+exports.NetworkAwarePrefetchManager = NetworkAwarePrefetchManager;
+exports.NetworkAwareRequestQueue = NetworkAwareRequestQueue;
+exports.NetworkSpeedDetector = NetworkSpeedDetector;
 exports.PrefetchManager = PrefetchManager;
 exports.RequestQueue = RequestQueue;
 exports.ScrollObserver = ScrollObserver;

@@ -17,4 +17,12 @@ export interface EngineState {
     loadedItems: number;
     isLoading: boolean;
 }
+export interface ScrollAnalysis {
+    velocity: number;
+    direction: 'up' | 'down' | 'stationary';
+    buffer: number;
+    prefetchDistance: number;
+    predictedPosition: number;
+    isIdle: boolean;
+}
 //# sourceMappingURL=types.d.ts.map

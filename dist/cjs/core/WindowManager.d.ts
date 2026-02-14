@@ -16,5 +16,9 @@ export declare class WindowManager {
      * Update item height if it changes
      */
     updateItemHeight(height: number): void;
+    /**
+     * Update buffer size if it changes
+     */
+    updateBufferSize(size: number): void;
 }
 //# sourceMappingURL=WindowManager.d.ts.map

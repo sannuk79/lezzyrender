@@ -46,4 +46,11 @@ export class WindowManager {
   updateItemHeight(height: number): void {
     this.itemHeight = height;
   }
+
+  /**
+   * Update buffer size if it changes
+   */
+  updateBufferSize(size: number): void {
+    this.bufferSize = size;
+  }
 }

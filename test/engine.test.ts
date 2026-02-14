@@ -87,9 +87,9 @@ async function runTests() {
       expect(state.visibleRange.start).toBeGreaterThanOrEqual(0);
     });
 
-    test('should determine when to fetch more items', () => {
+    test('should determine when to fetch more items', async () => {
       // Initially should not need to fetch more since no fetchMore callback is set
-      const shouldFetch = engine.shouldFetchMore();
+      const shouldFetch = await engine.shouldFetchMore();
       expect(shouldFetch).toBe(false);
     });
 

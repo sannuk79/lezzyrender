@@ -4,12 +4,16 @@ export declare class Engine {
     private windowManager;
     private prefetchManager;
     private requestQueue;
+    private intelligentScrollDetector;
+    private networkDetector;
+    private networkAwarePrefetchManager;
+    private networkAwareRequestQueue;
     private state;
     private fetchMoreCallback;
     private totalItems;
     constructor(config: EngineConfig);
     /**
-     * Update scroll position and recalculate visible range
+     * Update scroll position and recalculate visible range with intelligent detection
      */
     updateScrollPosition(scrollTop: number): void;
     /**
@@ -17,11 +21,11 @@ export declare class Engine {
      */
     getVisibleRange(): VisibleRange;
     /**
-     * Check if more items should be fetched
+     * Check if more items should be fetched with intelligent and network-aware detection
      */
-    shouldFetchMore(): boolean;
+    shouldFetchMore(): Promise<boolean>;
     /**
-     * Fetch more items
+     * Fetch more items with network awareness
      */
     fetchMore(): Promise<void>;
     /**

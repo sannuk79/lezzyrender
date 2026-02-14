@@ -1,22 +1,23 @@
 export class PrefetchManager {
-  private bufferSize: number;
-
-  constructor(bufferSize: number = 5) {
-    this.bufferSize = bufferSize;
-  }
+  /**
+   * This class is kept for backward compatibility
+   * Intelligent prefetching is now handled in the Engine class
+   */
+  constructor() {}
 
   /**
-   * Determine if more items should be fetched based on visible range and loaded items
+   * Legacy method - not used in intelligent mode
    */
   shouldPrefetch(visibleEnd: number, totalLoaded: number): boolean {
     // Simple rule: if visible end is approaching the loaded boundary, fetch more
-    return visibleEnd >= totalLoaded - this.bufferSize;
+    return visibleEnd >= totalLoaded - 5; // Default buffer
   }
 
   /**
-   * Update buffer size if it changes
+   * Update buffer size if it changes (for backward compatibility)
    */
   updateBufferSize(size: number): void {
-    this.bufferSize = size;
+    // This method exists for backward compatibility
+    // Intelligent prefetching is now handled in the Engine class
   }
 }
