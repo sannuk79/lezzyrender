@@ -486,6 +486,263 @@ class NetworkAwareRequestQueue {
     }
 }
 
+class DevicePerformanceMonitor {
+    constructor() {
+        this.frameRateHistory = [];
+        this.memoryUsageHistory = [];
+        this.gcMonitoring = false;
+        this.HISTORY_SIZE = 10;
+        this.setupPerformanceMonitoring();
+    }
+    // Monitor frame rate
+    async getFrameRate() {
+        return new Promise(resolve => {
+            const start = performance.now();
+            let frames = 0;
+            const measure = () => {
+                frames++;
+                if (frames >= 60) { // Measure over 60 frames
+                    const elapsed = performance.now() - start;
+                    const fps = Math.round((frames / elapsed) * 1000);
+                    this.frameRateHistory.push(fps);
+                    if (this.frameRateHistory.length > this.HISTORY_SIZE) {
+                        this.frameRateHistory.shift();
+                    }
+                    resolve(fps);
+                }
+                else {
+                    requestAnimationFrame(measure);
+                }
+            };
+            requestAnimationFrame(measure);
+        });
+    }
+    // Get average frame rate
+    getAverageFrameRate() {
+        if (this.frameRateHistory.length === 0)
+            return 60;
+        const sum = this.frameRateHistory.reduce((a, b) => a + b, 0);
+        return sum / this.frameRateHistory.length;
+    }
+    // Monitor memory usage (where available)
+    getMemoryInfo() {
+        if ('memory' in performance) {
+            // @ts-ignore - memory property is non-standard
+            const mem = performance.memory;
+            if (mem) {
+                return {
+                    used: mem.usedJSHeapSize,
+                    total: mem.jsHeapSizeLimit
+                };
+            }
+        }
+        return null;
+    }
+    // Assess overall device performance
+    async assessPerformance() {
+        const frameRate = await this.getFrameRate();
+        const memoryInfo = this.getMemoryInfo();
+        // Normalize frame rate (60fps = excellent, 30fps = poor)
+        const frameRateScore = Math.min(frameRate / 60, 1);
+        // If we have memory info, factor it in
+        if (memoryInfo) {
+            const memoryScore = 1 - (memoryInfo.used / memoryInfo.total);
+            return (frameRateScore * 0.7) + (memoryScore * 0.3);
+        }
+        return frameRateScore;
+    }
+    setupPerformanceMonitoring() {
+        // Set up performance monitoring intervals
+        setInterval(() => {
+            this.getFrameRate(); // Update frame rate history
+        }, 5000); // Every 5 seconds
+    }
+    // Get performance insights
+    getPerformanceInsights() {
+        const frameRate = this.getAverageFrameRate();
+        const memoryInfo = this.getMemoryInfo();
+        // Calculate performance score based on frame rate
+        const performanceScore = Math.min(frameRate / 60, 1);
+        return {
+            frameRate,
+            performanceScore,
+            memoryUsed: (memoryInfo === null || memoryInfo === void 0 ? void 0 : memoryInfo.used) || null,
+            memoryTotal: (memoryInfo === null || memoryInfo === void 0 ? void 0 : memoryInfo.total) || null
+        };
+    }
+}
+
+class ContentComplexityAnalyzer {
+    // Analyze content complexity based on various factors
+    analyzeContentComplexity(items) {
+        if (items.length === 0)
+            return 0.1; // Minimal complexity for empty
+        let totalComplexity = 0;
+        for (const item of items) {
+            // Analyze different aspects of complexity
+            const textComplexity = this.analyzeTextComplexity(item);
+            const mediaComplexity = this.analyzeMediaComplexity(item);
+            const componentComplexity = this.analyzeComponentComplexity(item);
+            totalComplexity += (textComplexity + mediaComplexity + componentComplexity) / 3;
+        }
+        // Return average complexity normalized to 0-1 scale
+        return Math.min(totalComplexity / items.length, 1);
+    }
+    analyzeTextComplexity(item) {
+        let complexity = 0;
+        // Length of text content
+        if (typeof item.text === 'string') {
+            complexity += Math.min(item.text.length / 1000, 0.5); // Max 0.5 for text
+        }
+        // Number of text elements
+        if (Array.isArray(item.textElements)) {
+            complexity += Math.min(item.textElements.length / 10, 0.3); // Max 0.3 for elements
+        }
+        // Formatting complexity
+        if (item.hasRichText)
+            complexity += 0.2;
+        return Math.min(complexity, 1);
+    }
+    analyzeMediaComplexity(item) {
+        let complexity = 0;
+        // Number of media elements
+        if (Array.isArray(item.media)) {
+            complexity += Math.min(item.media.length * 0.2, 0.5);
+        }
+        // Media types (images, videos are more complex than icons)
+        if (item.hasVideo)
+            complexity += 0.3;
+        if (item.hasImage)
+            complexity += 0.15;
+        if (item.hasSVG)
+            complexity += 0.1;
+        return Math.min(complexity, 1);
+    }
+    analyzeComponentComplexity(item) {
+        let complexity = 0;
+        // Number of nested components
+        if (typeof item.componentDepth === 'number') {
+            complexity += Math.min(item.componentDepth * 0.1, 0.4);
+        }
+        // Interactivity
+        if (item.interactive)
+            complexity += 0.2;
+        if (item.hasAnimations)
+            complexity += 0.2;
+        if (item.hasState)
+            complexity += 0.1;
+        return Math.min(complexity, 1);
+    }
+    // Get complexity insights
+    getComplexityInsights(items) {
+        if (items.length === 0) {
+            return {
+                averageComplexity: 0.1,
+                textComplexity: 0,
+                mediaComplexity: 0,
+                componentComplexity: 0
+            };
+        }
+        let totalText = 0, totalMedia = 0, totalComponent = 0;
+        for (const item of items) {
+            totalText += this.analyzeTextComplexity(item);
+            totalMedia += this.analyzeMediaComplexity(item);
+            totalComponent += this.analyzeComponentComplexity(item);
+        }
+        return {
+            averageComplexity: this.analyzeContentComplexity(items),
+            textComplexity: totalText / items.length,
+            mediaComplexity: totalMedia / items.length,
+            componentComplexity: totalComponent / items.length
+        };
+    }
+}
+
+class AdaptiveBufferCalculator {
+    constructor() {
+        this.scrollFactor = 0.3; // Weight for scroll velocity
+        this.networkFactor = 0.3; // Weight for network quality
+        this.performanceFactor = 0.2; // Weight for device performance
+        this.contentFactor = 0.2; // Weight for content complexity
+        this.performanceMonitor = new DevicePerformanceMonitor();
+        this.contentAnalyzer = new ContentComplexityAnalyzer();
+    }
+    // Calculate optimal buffer size based on multiple factors
+    async calculateOptimalBuffer(params) {
+        // Calculate scroll-based buffer
+        const scrollBuffer = this.calculateScrollBuffer(params.scrollVelocity, params.baseBuffer);
+        // Calculate network-based adjustment
+        const networkAdjustment = this.calculateNetworkAdjustment(params.networkQuality);
+        // Calculate performance-based adjustment
+        const performanceScore = await this.performanceMonitor.assessPerformance();
+        const performanceAdjustment = this.calculatePerformanceAdjustment(performanceScore);
+        // Calculate content-based adjustment
+        const contentComplexity = this.contentAnalyzer.analyzeContentComplexity(params.visibleItems);
+        const contentAdjustment = this.calculateContentAdjustment(contentComplexity);
+        // Combine all factors
+        const weightedBuffer = (scrollBuffer * this.scrollFactor +
+            (params.baseBuffer * networkAdjustment) * this.networkFactor +
+            (params.baseBuffer * performanceAdjustment) * this.performanceFactor +
+            (params.baseBuffer * contentAdjustment) * this.contentFactor);
+        // Apply reasonable bounds
+        return Math.max(3, Math.min(50, Math.round(weightedBuffer)));
+    }
+    calculateScrollBuffer(velocity, baseBuffer) {
+        const absVelocity = Math.abs(velocity);
+        if (absVelocity > 2.0)
+            return baseBuffer * 4; // Very fast scroll
+        if (absVelocity > 1.0)
+            return baseBuffer * 2.5; // Fast scroll
+        if (absVelocity > 0.3)
+            return baseBuffer * 1.5; // Medium scroll
+        return baseBuffer * 0.8; // Slow scroll
+    }
+    calculateNetworkAdjustment(quality) {
+        switch (quality) {
+            case 'excellent': return 1.5; // More buffer on fast networks
+            case 'good': return 1.2; // Slightly more
+            case 'poor': return 0.7; // Less buffer on slow networks
+            case 'offline': return 0.5; // Minimal buffer when offline
+            default: return 1.0;
+        }
+    }
+    calculatePerformanceAdjustment(performance) {
+        // performance is 0-1 scale (0 = poor, 1 = excellent)
+        return 0.5 + (performance * 0.8); // Range from 0.5 to 1.3
+    }
+    calculateContentAdjustment(complexity) {
+        // complexity is 0-1 scale (0 = simple, 1 = complex)
+        return 1.5 - (complexity * 0.8); // Range from 0.7 to 1.5
+    }
+    // Get adaptive insights
+    async getAdaptiveInsights(params) {
+        const buffer = await this.calculateOptimalBuffer(params);
+        const perfInsights = this.performanceMonitor.getPerformanceInsights();
+        const complexityInsights = this.contentAnalyzer.getComplexityInsights(params.visibleItems);
+        return {
+            currentBuffer: buffer,
+            performance: {
+                frameRate: perfInsights.frameRate,
+                score: perfInsights.performanceScore
+            },
+            network: {
+                quality: params.networkQuality,
+                adjustment: this.calculateNetworkAdjustment(params.networkQuality)
+            },
+            complexity: {
+                score: this.contentAnalyzer.analyzeContentComplexity(params.visibleItems),
+                breakdown: complexityInsights
+            },
+            factors: {
+                scroll: this.calculateScrollBuffer(params.scrollVelocity, params.baseBuffer),
+                network: this.calculateNetworkAdjustment(params.networkQuality),
+                performance: this.calculatePerformanceAdjustment(perfInsights.performanceScore),
+                content: this.calculateContentAdjustment(complexityInsights.averageComplexity)
+            }
+        };
+    }
+}
+
 class Engine {
     constructor(config) {
         this.fetchMoreCallback = null;
@@ -500,6 +757,7 @@ class Engine {
         this.networkDetector = new NetworkSpeedDetector();
         this.networkAwarePrefetchManager = new NetworkAwarePrefetchManager(this.networkDetector);
         this.networkAwareRequestQueue = new NetworkAwareRequestQueue(this.networkDetector);
+        this.adaptiveBufferCalculator = new AdaptiveBufferCalculator();
         this.totalItems = this.config.totalItems || Number.MAX_SAFE_INTEGER;
         this.state = {
             scrollTop: 0,
@@ -511,19 +769,26 @@ class Engine {
     /**
      * Update scroll position and recalculate visible range with intelligent detection
      */
-    updateScrollPosition(scrollTop) {
+    async updateScrollPosition(scrollTop) {
         // Calculate velocity and other intelligent metrics
         const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
         this.intelligentScrollDetector.getDirection(velocity);
-        // Calculate adaptive buffer based on scroll behavior
-        const adaptiveBuffer = this.intelligentScrollDetector.calculateBuffer(velocity);
+        // Get network quality for adaptive buffering
+        const networkQuality = await this.networkDetector.assessConnectionQuality();
+        // Calculate adaptive buffer considering all factors
+        const adaptiveBuffer = await this.adaptiveBufferCalculator.calculateOptimalBuffer({
+            scrollVelocity: velocity,
+            networkQuality,
+            baseBuffer: this.intelligentScrollDetector.calculateBuffer(velocity),
+            visibleItems: [] // In a real implementation, this would be the actual visible items
+        });
         // Update window manager with adaptive buffer
         this.windowManager.updateBufferSize(adaptiveBuffer);
         this.state.scrollTop = scrollTop;
         this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
         // Check if we need to fetch more items
-        if (this.shouldFetchMore()) {
-            this.fetchMore();
+        if (await this.shouldFetchMore()) {
+            await this.fetchMore();
         }
     }
     /**
@@ -544,6 +809,8 @@ class Engine {
             return false;
         // Get current velocity for intelligent prefetching
         const velocity = this.intelligentScrollDetector.calculateVelocity(this.state.scrollTop);
+        // Get network quality for adaptive prefetching
+        await this.networkDetector.assessConnectionQuality();
         // Calculate network-adjusted prefetch distance
         const prefetchDistance = await this.networkAwarePrefetchManager.calculateNetworkAdjustedPrefetch(velocity);
         // Use intelligent prefetch logic
@@ -840,5 +1107,5 @@ function throttle(func, limit) {
     };
 }
 
-export { Engine, IntelligentScrollDetector, LazyList, NetworkAwarePrefetchManager, NetworkAwareRequestQueue, NetworkSpeedDetector, PrefetchManager, RequestQueue, ScrollObserver, WindowManager, debounce, throttle, useLazyList };
+export { AdaptiveBufferCalculator, ContentComplexityAnalyzer, DevicePerformanceMonitor, Engine, IntelligentScrollDetector, LazyList, NetworkAwarePrefetchManager, NetworkAwareRequestQueue, NetworkSpeedDetector, PrefetchManager, RequestQueue, ScrollObserver, WindowManager, debounce, throttle, useLazyList };
 //# sourceMappingURL=index.js.map

@@ -8,6 +8,7 @@ export declare class Engine {
     private networkDetector;
     private networkAwarePrefetchManager;
     private networkAwareRequestQueue;
+    private adaptiveBufferCalculator;
     private state;
     private fetchMoreCallback;
     private totalItems;
@@ -15,7 +16,7 @@ export declare class Engine {
     /**
      * Update scroll position and recalculate visible range with intelligent detection
      */
-    updateScrollPosition(scrollTop: number): void;
+    updateScrollPosition(scrollTop: number): Promise<void>;
     /**
      * Get the current visible range
      */

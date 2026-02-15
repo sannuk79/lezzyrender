@@ -7,6 +7,9 @@ export { IntelligentScrollDetector } from './core/IntelligentScrollDetector';
 export { NetworkSpeedDetector } from './core/NetworkSpeedDetector';
 export { NetworkAwarePrefetchManager } from './core/NetworkAwarePrefetchManager';
 export { NetworkAwareRequestQueue } from './core/NetworkAwareRequestQueue';
+export { AdaptiveBufferCalculator } from './core/AdaptiveBufferCalculator';
+export { DevicePerformanceMonitor } from './core/DevicePerformanceMonitor';
+export { ContentComplexityAnalyzer } from './core/ContentComplexityAnalyzer';
 export type { EngineConfig, VisibleRange, FetchMoreCallback, EngineState, ScrollAnalysis } from './core/types';
 
 // Platform exports

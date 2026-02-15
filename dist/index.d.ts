@@ -37,6 +37,7 @@ declare class Engine {
     private networkDetector;
     private networkAwarePrefetchManager;
     private networkAwareRequestQueue;
+    private adaptiveBufferCalculator;
     private state;
     private fetchMoreCallback;
     private totalItems;
@@ -44,7 +45,7 @@ declare class Engine {
     /**
      * Update scroll position and recalculate visible range with intelligent detection
      */
-    updateScrollPosition(scrollTop: number): void;
+    updateScrollPosition(scrollTop: number): Promise<void>;
     /**
      * Get the current visible range
      */
@@ -204,6 +205,87 @@ declare class NetworkAwareRequestQueue {
     clear(): void;
 }
 
+declare class AdaptiveBufferCalculator {
+    private scrollFactor;
+    private networkFactor;
+    private performanceFactor;
+    private contentFactor;
+    private performanceMonitor;
+    private contentAnalyzer;
+    constructor();
+    calculateOptimalBuffer(params: {
+        scrollVelocity: number;
+        networkQuality: 'excellent' | 'good' | 'poor' | 'offline';
+        baseBuffer: number;
+        visibleItems: any[];
+    }): Promise<number>;
+    private calculateScrollBuffer;
+    private calculateNetworkAdjustment;
+    private calculatePerformanceAdjustment;
+    private calculateContentAdjustment;
+    getAdaptiveInsights(params: {
+        scrollVelocity: number;
+        networkQuality: 'excellent' | 'good' | 'poor' | 'offline';
+        baseBuffer: number;
+        visibleItems: any[];
+    }): Promise<{
+        currentBuffer: number;
+        performance: {
+            frameRate: number;
+            score: number;
+        };
+        network: {
+            quality: string;
+            adjustment: number;
+        };
+        complexity: {
+            score: number;
+            breakdown: any;
+        };
+        factors: {
+            scroll: number;
+            network: number;
+            performance: number;
+            content: number;
+        };
+    }>;
+}
+
+declare class DevicePerformanceMonitor {
+    private frameRateHistory;
+    private memoryUsageHistory;
+    private gcMonitoring;
+    private readonly HISTORY_SIZE;
+    constructor();
+    getFrameRate(): Promise<number>;
+    getAverageFrameRate(): number;
+    getMemoryInfo(): {
+        used: number;
+        total: number;
+    } | null;
+    assessPerformance(): Promise<number>;
+    private setupPerformanceMonitoring;
+    getPerformanceInsights(): {
+        frameRate: number;
+        performanceScore: number;
+        memoryUsed: number | null;
+        memoryTotal: number | null;
+    };
+}
+
+declare class ContentComplexityAnalyzer {
+    analyzeContentComplexity(items: any[]): number;
+    private analyzeTextComplexity;
+    private analyzeMediaComplexity;
+    private analyzeComponentComplexity;
+    getComplexityInsights(items: any[]): {
+        averageComplexity: number;
+        textComplexity: number;
+        mediaComplexity: number;
+        componentComplexity: number;
+    };
+}
+
 declare class ScrollObserver {
     private container;
     private callback;
@@ -268,5 +350,5 @@ declare function debounce<T extends (...args: any[]) => any>(func: T, wait: numb
  */
 declare function throttle<T extends (...args: any[]) => any>(func: T, limit: number): (...args: Parameters<T>) => void;
 
-export { Engine, IntelligentScrollDetector, LazyList, NetworkAwarePrefetchManager, NetworkAwareRequestQueue, NetworkSpeedDetector, PrefetchManager, RequestQueue, ScrollObserver, WindowManager, debounce, throttle, useLazyList };
+export { AdaptiveBufferCalculator, ContentComplexityAnalyzer, DevicePerformanceMonitor, Engine, IntelligentScrollDetector, LazyList, NetworkAwarePrefetchManager, NetworkAwareRequestQueue, NetworkSpeedDetector, PrefetchManager, RequestQueue, ScrollObserver, WindowManager, debounce, throttle, useLazyList };
 export type { EngineConfig, EngineState, FetchMoreCallback, ScrollAnalysis, VisibleRange };

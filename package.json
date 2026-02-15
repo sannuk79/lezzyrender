@@ -1,6 +1,6 @@
 {
   "name": "lazy-render-virtual-scroll",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A framework-agnostic virtual scrolling and lazy rendering solution",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -25,6 +25,8 @@
     "performance",
     "react",
     "vue",
+    "Lazy",
+    "Lazy-loader",
     "angular",
     "scrolling",
     "infinite-scroll",

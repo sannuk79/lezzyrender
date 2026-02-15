@@ -6,6 +6,7 @@ import { IntelligentScrollDetector } from './IntelligentScrollDetector';
 import { NetworkSpeedDetector } from './NetworkSpeedDetector';
 import { NetworkAwarePrefetchManager } from './NetworkAwarePrefetchManager';
 import { NetworkAwareRequestQueue } from './NetworkAwareRequestQueue';
+import { AdaptiveBufferCalculator } from './AdaptiveBufferCalculator';
 
 export class Engine {
   private config: EngineConfig;
@@ -16,6 +17,7 @@ export class Engine {
   private networkDetector: NetworkSpeedDetector;
   private networkAwarePrefetchManager: NetworkAwarePrefetchManager;
   private networkAwareRequestQueue: NetworkAwareRequestQueue;
+  private adaptiveBufferCalculator: AdaptiveBufferCalculator;
   
   private state: EngineState;
   private fetchMoreCallback: FetchMoreCallback | null = null;
@@ -39,6 +41,7 @@ export class Engine {
     this.networkDetector = new NetworkSpeedDetector();
     this.networkAwarePrefetchManager = new NetworkAwarePrefetchManager(this.networkDetector);
     this.networkAwareRequestQueue = new NetworkAwareRequestQueue(this.networkDetector);
+    this.adaptiveBufferCalculator = new AdaptiveBufferCalculator();
     
     this.totalItems = this.config.totalItems || Number.MAX_SAFE_INTEGER;
     
@@ -53,13 +56,21 @@ export class Engine {
   /**
    * Update scroll position and recalculate visible range with intelligent detection
    */
-  updateScrollPosition(scrollTop: number): void {
+  async updateScrollPosition(scrollTop: number): Promise<void> {
     // Calculate velocity and other intelligent metrics
     const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
     const direction = this.intelligentScrollDetector.getDirection(velocity);
     
-    // Calculate adaptive buffer based on scroll behavior
-    const adaptiveBuffer = this.intelligentScrollDetector.calculateBuffer(velocity);
+    // Get network quality for adaptive buffering
+    const networkQuality = await this.networkDetector.assessConnectionQuality();
+    
+    // Calculate adaptive buffer considering all factors
+    const adaptiveBuffer = await this.adaptiveBufferCalculator.calculateOptimalBuffer({
+      scrollVelocity: velocity,
+      networkQuality,
+      baseBuffer: this.intelligentScrollDetector.calculateBuffer(velocity),
+      visibleItems: [] // In a real implementation, this would be the actual visible items
+    });
     
     // Update window manager with adaptive buffer
     this.windowManager.updateBufferSize(adaptiveBuffer);
@@ -68,8 +79,8 @@ export class Engine {
     this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
     
     // Check if we need to fetch more items
-    if (this.shouldFetchMore()) {
-      this.fetchMore();
+    if (await this.shouldFetchMore()) {
+      await this.fetchMore();
     }
   }
 
@@ -90,6 +101,9 @@ export class Engine {
     
     // Get current velocity for intelligent prefetching
     const velocity = this.intelligentScrollDetector.calculateVelocity(this.state.scrollTop);
+    
+    // Get network quality for adaptive prefetching
+    const networkQuality = await this.networkDetector.assessConnectionQuality();
     
     // Calculate network-adjusted prefetch distance
     const prefetchDistance = await this.networkAwarePrefetchManager.calculateNetworkAdjustedPrefetch(velocity);
