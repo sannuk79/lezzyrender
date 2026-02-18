@@ -1,15 +1,47 @@
 {
   "name": "lazy-render-virtual-scroll",
-  "version": "1.0.7",
+  "version": "1.6.0",
   "description": "A framework-agnostic virtual scrolling and lazy rendering solution",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/esm/adapters/react/index.js",
+      "require": "./dist/cjs/adapters/react/index.js",
+      "types": "./dist/adapters/react/index.d.ts"
+    },
+    "./vue": {
+      "import": "./dist/esm/vue/index.js",
+      "require": "./dist/cjs/vue/index.js",
+      "types": "./dist/vue/index.d.ts"
+    },
+    "./angular": {
+      "import": "./dist/esm/angular/index.js",
+      "require": "./dist/cjs/angular/index.js",
+      "types": "./dist/angular/index.d.ts"
+    },
+    "./svelte": {
+      "import": "./dist/esm/svelte/index.js",
+      "require": "./dist/cjs/svelte/index.js",
+      "types": "./dist/svelte/index.d.ts"
+    },
+    "./backend-helpers": {
+      "import": "./backend-helpers/pagination.ts",
+      "require": "./backend-helpers/pagination.ts"
+    }
+  },
   "files": [
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "backend-helpers/"
   ],
   "scripts": {
     "build": "rollup -c",

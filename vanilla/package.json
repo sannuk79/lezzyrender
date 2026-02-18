@@ -1,0 +1,7 @@
+{
+  "name": "lazy-render-virtual-scroll/vanilla",
+  "private": true,
+  "main": "../dist/cjs/vanilla/index.js",
+  "module": "../dist/esm/vanilla/index.js",
+  "types": "../dist/vanilla/index.d.ts"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "lazy-render-virtual-scroll/svelte",
+  "private": true,
+  "main": "../dist/cjs/svelte/index.js",
+  "module": "../dist/esm/svelte/index.js",
+  "types": "../dist/svelte/index.d.ts"
+}

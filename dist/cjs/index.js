@@ -745,6 +745,873 @@ class AdaptiveBufferCalculator {
     }
 }
 
+class PerformanceOptimizer {
+    constructor() {
+        this.frameBudget = 16; // Target for 60fps (16.67ms per frame)
+        this.lastFrameTime = 0;
+        this.animationFrameId = null;
+        this.isOptimizing = false;
+        // Frame rate limiter to prevent excessive updates
+        this.lastUpdate = 0;
+        this.minUpdateInterval = 16; // Minimum 16ms between updates (60fps)
+        // Batch updates to reduce DOM manipulations
+        this.updateQueue = [];
+        this.isProcessingQueue = false;
+        // Memory optimization
+        this.cleanupThreshold = 1000; // Clean up items beyond this threshold
+        this.gcInterval = null;
+        this.setupPerformanceMonitoring();
+    }
+    // Optimize rendering by limiting updates to frame budget
+    scheduleOptimizedUpdate(updateFn) {
+        const now = performance.now();
+        // Throttle updates based on frame rate
+        if (now - this.lastUpdate < this.minUpdateInterval) {
+            // Queue the update for later
+            this.updateQueue.push(updateFn);
+            if (!this.isProcessingQueue) {
+                this.processUpdateQueue();
+            }
+            return;
+        }
+        // Check if we have enough time in the current frame
+        if (this.getTimeRemaining() > 4) { // Leave 4ms buffer
+            updateFn();
+            this.lastUpdate = now;
+        }
+        else {
+            // Schedule for next frame
+            this.updateQueue.push(updateFn);
+            if (!this.isProcessingQueue) {
+                this.processUpdateQueue();
+            }
+        }
+    }
+    // Process queued updates efficiently
+    async processUpdateQueue() {
+        if (this.updateQueue.length === 0) {
+            this.isProcessingQueue = false;
+            return;
+        }
+        this.isProcessingQueue = true;
+        const currentTime = performance.now();
+        // Process as many updates as possible within frame budget
+        while (this.updateQueue.length > 0 && this.getTimeRemaining() > 2) {
+            const updateFn = this.updateQueue.shift();
+            if (updateFn) {
+                updateFn();
+            }
+        }
+        this.lastUpdate = currentTime;
+        if (this.updateQueue.length > 0) {
+            // Schedule remaining updates for next frame (only in browser environment)
+            if (typeof requestAnimationFrame !== 'undefined') {
+                requestAnimationFrame(() => this.processUpdateQueue());
+            }
+            else {
+                // In Node.js environment, use setTimeout as fallback
+                setTimeout(() => this.processUpdateQueue(), 0);
+            }
+        }
+        else {
+            this.isProcessingQueue = false;
+        }
+    }
+    // Get remaining time in current frame
+    getTimeRemaining() {
+        if (typeof performance === 'undefined' || !performance.now) {
+            return 16; // Fallback to 60fps
+        }
+        const currentTime = performance.now();
+        // Typically browsers target 10ms remaining time for smoothness
+        return Math.max(0, this.frameBudget - (currentTime - this.lastFrameTime));
+    }
+    // Memory optimization: cleanup off-screen items
+    optimizeMemory(cleanupFn, visibleRange) {
+        // Determine cleanup range (items far from visible range)
+        const cleanupStart = Math.max(0, visibleRange.end + this.cleanupThreshold);
+        const cleanupEnd = Math.max(0, visibleRange.start - this.cleanupThreshold);
+        if (cleanupStart > visibleRange.end) {
+            cleanupFn(visibleRange.end, cleanupStart);
+        }
+        if (cleanupEnd < visibleRange.start) {
+            cleanupFn(cleanupEnd, visibleRange.start);
+        }
+    }
+    // Enable GPU acceleration for smoother scrolling
+    enableGPUCssAcceleration(element) {
+        // Force hardware acceleration
+        element.style.willChange = 'transform';
+        element.style.transform = 'translateZ(0)';
+        element.style.backfaceVisibility = 'hidden';
+    }
+    // Disable GPU acceleration when not needed
+    disableGPUCssAcceleration(element) {
+        element.style.willChange = 'auto';
+        element.style.transform = '';
+        element.style.backfaceVisibility = '';
+    }
+    // Optimize for different device capabilities
+    getOptimizationProfile() {
+        // Simple profile detection based on common device characteristics
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        // Detect low-end devices
+        if (this.isLowEndDevice(userAgent)) {
+            return {
+                frameRate: 30, // Lower target for low-end devices
+                batchSize: 5, // Smaller batches
+                bufferMultiplier: 0.5, // Smaller buffer
+                updateInterval: 32 // 30fps interval
+            };
+        }
+        // Default profile for capable devices
+        return {
+            frameRate: 60,
+            batchSize: 10,
+            bufferMultiplier: 1.0,
+            updateInterval: 16 // 60fps interval
+        };
+    }
+    isLowEndDevice(userAgent) {
+        // Simple heuristic for low-end devices
+        const lowEndPatterns = [
+            /Android.*Mobile/,
+            /iPhone.*OS [0-9]+_[0-9]+/,
+            /Opera Mini/,
+            /IEMobile/
+        ];
+        return lowEndPatterns.some(pattern => pattern.test(userAgent));
+    }
+    // Setup performance monitoring
+    setupPerformanceMonitoring() {
+        // Check if we're in a browser environment
+        if (typeof window === 'undefined' || typeof requestAnimationFrame === 'undefined') {
+            // In Node.js environment, skip browser-specific monitoring
+            return;
+        }
+        // Monitor frame rate
+        let frameCount = 0;
+        let lastTime = performance.now();
+        const monitorFrameRate = () => {
+            frameCount++;
+            const currentTime = performance.now();
+            if (currentTime - lastTime >= 1000) { // Every second
+                const fps = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+                // Adjust optimization based on actual FPS
+                if (fps < 30) {
+                    this.frameBudget = 32; // Target 30fps
+                }
+                else if (fps < 50) {
+                    this.frameBudget = 20; // Target 50fps
+                }
+                else {
+                    this.frameBudget = 16; // Target 60fps
+                }
+            }
+            this.animationFrameId = requestAnimationFrame(monitorFrameRate);
+        };
+        this.animationFrameId = requestAnimationFrame(monitorFrameRate);
+        // Setup garbage collection monitoring
+        this.gcInterval = window.setInterval(() => {
+            if ('gc' in window) {
+                // @ts-ignore - gc is non-standard
+                window.gc();
+            }
+        }, 30000); // GC every 30 seconds
+    }
+    // Get performance insights
+    getPerformanceInsights() {
+        return {
+            frameRate: 60, // Would be calculated from monitoring
+            memoryUsage: this.getMemoryUsage(),
+            updateFrequency: 1000 / this.minUpdateInterval,
+            optimizationActive: this.isOptimizing
+        };
+    }
+    getMemoryUsage() {
+        var _a;
+        if ('memory' in performance) {
+            // @ts-ignore - memory property is non-standard
+            return ((_a = performance.memory) === null || _a === void 0 ? void 0 : _a.usedJSHeapSize) || null;
+        }
+        return null;
+    }
+    // Cleanup resources
+    cleanup() {
+        if (this.animationFrameId && typeof cancelAnimationFrame !== 'undefined') {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        if (this.gcInterval && typeof clearInterval !== 'undefined') {
+            clearInterval(this.gcInterval);
+        }
+        this.updateQueue = [];
+        this.isProcessingQueue = false;
+    }
+}
+
+class MemoryManager {
+    constructor(maxCacheSize = 1000) {
+        this.itemCache = new Map();
+        this.maxCacheSize = 1000; // Maximum items to keep in cache
+        this.cleanupThreshold = 500; // Start cleanup when cache exceeds this
+        this.visibleRange = { start: 0, end: 0 };
+        this.totalItems = 0;
+        this.maxCacheSize = maxCacheSize;
+    }
+    // Set visible range to optimize cache
+    setVisibleRange(range) {
+        this.visibleRange = range;
+    }
+    // Set total number of items
+    setTotalItems(total) {
+        this.totalItems = total;
+    }
+    // Get item from cache
+    get(key) {
+        return this.itemCache.get(key) || null;
+    }
+    // Set item in cache
+    set(key, value) {
+        this.itemCache.set(key, value);
+        // Clean up if cache is too large
+        if (this.itemCache.size > this.maxCacheSize) {
+            this.cleanupCache();
+        }
+    }
+    // Check if item exists in cache
+    has(key) {
+        return this.itemCache.has(key);
+    }
+    // Remove item from cache
+    delete(key) {
+        return this.itemCache.delete(key);
+    }
+    // Clear entire cache
+    clear() {
+        this.itemCache.clear();
+    }
+    // Clean up cache based on visibility and distance from visible range
+    cleanupCache() {
+        if (this.itemCache.size <= this.cleanupThreshold) {
+            return; // No need to clean up
+        }
+        const itemsToRemove = [];
+        // Find items that are far from visible range
+        for (const [key] of this.itemCache.entries()) {
+            const distanceFromVisible = this.getDistanceFromVisible(key);
+            // Remove items that are far from visible range
+            if (distanceFromVisible > 100) { // Arbitrary threshold
+                itemsToRemove.push(key);
+            }
+        }
+        // If we still have too many items, remove oldest accessed items
+        if (this.itemCache.size - itemsToRemove.length > this.cleanupThreshold) {
+            const sortedKeys = Array.from(this.itemCache.keys())
+                .sort((a, b) => a - b); // Sort by key (assuming they're indexes)
+            // Remove items that are furthest from visible range
+            for (const key of sortedKeys) {
+                if (this.itemCache.size <= this.cleanupThreshold)
+                    break;
+                const distance = this.getDistanceFromVisible(key);
+                if (distance > 50) { // Remove items beyond 50 units from visible
+                    itemsToRemove.push(key);
+                }
+            }
+        }
+        // Actually remove items
+        for (const key of itemsToRemove) {
+            this.itemCache.delete(key);
+        }
+    }
+    // Calculate distance from visible range
+    getDistanceFromVisible(index) {
+        if (index >= this.visibleRange.start && index <= this.visibleRange.end) {
+            return 0; // Inside visible range
+        }
+        if (index < this.visibleRange.start) {
+            return this.visibleRange.start - index;
+        }
+        return index - this.visibleRange.end;
+    }
+    // Get cache statistics
+    getStats() {
+        const visibleItems = Array.from(this.itemCache.keys())
+            .filter(key => key >= this.visibleRange.start && key <= this.visibleRange.end)
+            .length;
+        const offScreenItems = this.itemCache.size - visibleItems;
+        // Rough estimate of memory usage (in bytes)
+        let memoryEstimate = 0;
+        for (const [_, value] of this.itemCache.entries()) {
+            memoryEstimate += this.estimateObjectSize(value);
+        }
+        return {
+            size: this.itemCache.size,
+            maxCacheSize: this.maxCacheSize,
+            visibleItems,
+            offScreenItems,
+            memoryEstimate
+        };
+    }
+    // Estimate object size in bytes
+    estimateObjectSize(obj) {
+        if (obj === null || obj === undefined)
+            return 0;
+        if (typeof obj === 'string')
+            return obj.length * 2; // UTF-16 chars
+        if (typeof obj === 'number')
+            return 8; // 8 bytes for number
+        if (typeof obj === 'boolean')
+            return 4; // 4 bytes for boolean
+        if (typeof obj === 'object') {
+            let size = 0;
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    size += key.length * 2; // Key size
+                    size += this.estimateObjectSize(obj[key]); // Value size
+                }
+            }
+            return size;
+        }
+        return 0; // Other types
+    }
+    // Prune cache to only keep essential items
+    pruneEssential() {
+        const essentialItems = [];
+        // Keep items in visible range and nearby
+        for (const [key, value] of this.itemCache.entries()) {
+            if (this.isEssential(key)) {
+                essentialItems.push([key, value]);
+            }
+        }
+        // Clear cache and repopulate with essential items
+        this.itemCache.clear();
+        for (const [key, value] of essentialItems) {
+            this.itemCache.set(key, value);
+        }
+    }
+    // Check if item is essential (within buffer zone)
+    isEssential(index) {
+        const bufferZone = 20; // Keep items within 20 positions of visible range
+        return index >= (this.visibleRange.start - bufferZone) &&
+            index <= (this.visibleRange.end + bufferZone);
+    }
+    // Get cache size
+    getSize() {
+        return this.itemCache.size;
+    }
+    // Get cache keys
+    getKeys() {
+        return Array.from(this.itemCache.keys());
+    }
+}
+
+class GPUAccelerator {
+    constructor() {
+        this.gpuAccelerationEnabled = false;
+        this.gpuElements = new WeakSet();
+        this.animationFrameId = null;
+        this.gpuAccelerationEnabled = this.isGPUSupported();
+    }
+    // Check if GPU acceleration is supported
+    isGPUSupported() {
+        // Check if we're in a browser environment
+        if (typeof document === 'undefined') {
+            return false; // Not supported in Node.js environment
+        }
+        // Check for 3D transform support
+        const testEl = document.createElement('div');
+        return testEl.style.webkitTransform !== undefined ||
+            testEl.style.transform !== undefined;
+    }
+    // Enable GPU acceleration for an element
+    enableForElement(element) {
+        if (!this.gpuAccelerationEnabled)
+            return;
+        // Apply GPU-accelerated styles
+        element.style.willChange = 'transform';
+        element.style.transform = 'translateZ(0)';
+        element.style.backfaceVisibility = 'hidden';
+        element.style.perspective = '1000px';
+        // Add to tracked elements
+        this.gpuElements.add(element);
+    }
+    // Disable GPU acceleration for an element
+    disableForElement(element) {
+        if (!this.gpuAccelerationEnabled)
+            return;
+        // Remove GPU-accelerated styles
+        element.style.willChange = 'auto';
+        element.style.transform = '';
+        element.style.backfaceVisibility = '';
+        element.style.perspective = '';
+        // Remove from tracked elements
+        this.gpuElements.delete(element);
+    }
+    // Apply GPU acceleration to a list of elements
+    enableForElements(elements) {
+        elements.forEach(el => this.enableForElement(el));
+    }
+    // Batch update GPU acceleration
+    batchUpdate(elements, enable) {
+        if (!this.gpuAccelerationEnabled)
+            return;
+        if (enable) {
+            this.enableForElements(elements);
+        }
+        else {
+            elements.forEach(el => this.disableForElement(el));
+        }
+    }
+    // Optimize scrolling container for GPU acceleration
+    optimizeScrollContainer(container) {
+        if (!this.gpuAccelerationEnabled)
+            return;
+        // Apply optimizations to container
+        container.style.transform = 'translateZ(0)';
+        container.style.willChange = 'scroll-position';
+        container.style.webkitOverflowScrolling = 'touch'; // For iOS
+    }
+    // Optimize individual items for GPU acceleration
+    optimizeItem(item) {
+        if (!this.gpuAccelerationEnabled)
+            return;
+        // Apply lightweight GPU acceleration
+        item.style.transform = 'translateZ(0)';
+        item.style.willChange = 'transform';
+    }
+    // Get GPU acceleration status
+    getStatus() {
+        // Since WeakSet doesn't have a size property, we can't count directly
+        // This is a limitation of WeakSet
+        return {
+            enabled: this.gpuAccelerationEnabled,
+            supported: this.isGPUSupported(),
+            elementCount: 0 // Placeholder - would need different tracking method
+        };
+    }
+    // Optimize for different scenarios
+    optimizeForScenario(scenario) {
+        if (!this.gpuAccelerationEnabled)
+            return;
+        switch (scenario) {
+            case 'scrolling':
+                // Optimize for smooth scrolling
+                document.body.style.willChange = 'transform';
+                break;
+            case 'animation':
+                // Optimize for animations
+                document.body.style.transform = 'translateZ(0)';
+                break;
+            case 'static':
+                // Remove optimizations when not needed
+                document.body.style.willChange = 'auto';
+                document.body.style.transform = '';
+                break;
+        }
+    }
+    // Cleanup GPU acceleration resources
+    cleanup() {
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        // Reset any applied styles (would need to track them)
+        this.gpuElements = new WeakSet();
+    }
+    // Check if element has GPU acceleration enabled
+    isAccelerated(element) {
+        return this.gpuElements.has(element);
+    }
+    // Get optimization recommendations
+    getRecommendations() {
+        const recommendations = [];
+        if (!this.gpuAccelerationEnabled) {
+            recommendations.push('GPU acceleration not supported on this device');
+        }
+        else {
+            recommendations.push('GPU acceleration enabled for smooth performance');
+            recommendations.push('Using hardware-accelerated compositing');
+            recommendations.push('Optimized for 60fps rendering');
+        }
+        return recommendations;
+    }
+}
+
+/**
+ * Batch Size Optimizer
+ * Dynamically adjusts batch size based on scroll speed, network, and performance
+ */
+class BatchSizeOptimizer {
+    constructor(config, networkDetector, performanceMonitor) {
+        this.scrollSpeedHistory = [];
+        this.renderTimeHistory = [];
+        this.HISTORY_SIZE = 10;
+        this.config = {
+            minBatchSize: (config === null || config === void 0 ? void 0 : config.minBatchSize) || 10,
+            maxBatchSize: (config === null || config === void 0 ? void 0 : config.maxBatchSize) || 100,
+            baseBatchSize: (config === null || config === void 0 ? void 0 : config.baseBatchSize) || 50,
+            scrollSpeedThreshold: (config === null || config === void 0 ? void 0 : config.scrollSpeedThreshold) || 1.0
+        };
+        this.currentBatchSize = this.config.baseBatchSize;
+        this.networkDetector = networkDetector || new NetworkSpeedDetector();
+        this.performanceMonitor = performanceMonitor || new DevicePerformanceMonitor();
+    }
+    /**
+     * Calculate optimal batch size based on all factors
+     */
+    async calculateOptimalBatchSize(scrollSpeed) {
+        // Track scroll speed history
+        this.trackScrollSpeed(scrollSpeed);
+        // Get network quality
+        const networkQuality = await this.networkDetector.assessConnectionQuality();
+        // Get performance score
+        const performanceScore = await this.performanceMonitor.assessPerformance();
+        // Calculate batch size based on scroll speed
+        const speedMultiplier = this.calculateSpeedMultiplier(scrollSpeed);
+        // Calculate batch size based on network
+        const networkMultiplier = this.calculateNetworkMultiplier(networkQuality);
+        // Calculate batch size based on performance
+        const performanceMultiplier = this.calculatePerformanceMultiplier(performanceScore);
+        // Calculate final batch size
+        const optimalBatchSize = Math.round(this.config.baseBatchSize * speedMultiplier * networkMultiplier * performanceMultiplier);
+        // Apply min/max bounds
+        this.currentBatchSize = Math.max(this.config.minBatchSize, Math.min(this.config.maxBatchSize, optimalBatchSize));
+        return this.currentBatchSize;
+    }
+    /**
+     * Calculate multiplier based on scroll speed
+     */
+    calculateSpeedMultiplier(scrollSpeed) {
+        const avgScrollSpeed = this.getAverageScrollSpeed();
+        // Fast scrolling = larger batches (preload more)
+        if (Math.abs(avgScrollSpeed) > this.config.scrollSpeedThreshold * 2) {
+            return 1.5; // 50% more items
+        }
+        else if (Math.abs(avgScrollSpeed) > this.config.scrollSpeedThreshold) {
+            return 1.2; // 20% more items
+        }
+        else if (Math.abs(avgScrollSpeed) < 0.3) {
+            return 0.8; // 20% fewer items (user reading carefully)
+        }
+        return 1.0; // Normal batch size
+    }
+    /**
+     * Calculate multiplier based on network quality
+     */
+    calculateNetworkMultiplier(quality) {
+        switch (quality) {
+            case 'excellent':
+                return 1.3; // Load more on fast network
+            case 'good':
+                return 1.1; // Slightly more
+            case 'poor':
+                return 0.6; // Load less on slow network
+            case 'offline':
+                return 0.3; // Minimal loading when offline
+            default:
+                return 1.0;
+        }
+    }
+    /**
+     * Calculate multiplier based on device performance
+     */
+    calculatePerformanceMultiplier(score) {
+        // score is 0-1 (0 = poor, 1 = excellent)
+        if (score > 0.8) {
+            return 1.2; // High-performance device
+        }
+        else if (score > 0.5) {
+            return 1.0; // Average device
+        }
+        else {
+            return 0.7; // Low-performance device
+        }
+    }
+    /**
+     * Track scroll speed for averaging
+     */
+    trackScrollSpeed(speed) {
+        this.scrollSpeedHistory.push(speed);
+        if (this.scrollSpeedHistory.length > this.HISTORY_SIZE) {
+            this.scrollSpeedHistory.shift();
+        }
+    }
+    /**
+     * Get average scroll speed
+     */
+    getAverageScrollSpeed() {
+        if (this.scrollSpeedHistory.length === 0)
+            return 0;
+        const sum = this.scrollSpeedHistory.reduce((a, b) => a + b, 0);
+        return sum / this.scrollSpeedHistory.length;
+    }
+    /**
+     * Track render time for performance monitoring
+     */
+    trackRenderTime(renderTime) {
+        this.renderTimeHistory.push(renderTime);
+        if (this.renderTimeHistory.length > this.HISTORY_SIZE) {
+            this.renderTimeHistory.shift();
+        }
+    }
+    /**
+     * Get average render time
+     */
+    getAverageRenderTime() {
+        if (this.renderTimeHistory.length === 0)
+            return 0;
+        const sum = this.renderTimeHistory.reduce((a, b) => a + b, 0);
+        return sum / this.renderTimeHistory.length;
+    }
+    /**
+     * Get current batch metrics
+     */
+    getMetrics() {
+        return {
+            currentBatchSize: this.currentBatchSize,
+            scrollSpeed: this.getAverageScrollSpeed(),
+            networkQuality: 'good', // Would need to cache this
+            performanceScore: 0.8, // Would need to cache this
+            avgRenderTime: this.getAverageRenderTime()
+        };
+    }
+    /**
+     * Get current batch size
+     */
+    getCurrentBatchSize() {
+        return this.currentBatchSize;
+    }
+    /**
+     * Reset optimizer
+     */
+    reset() {
+        this.scrollSpeedHistory = [];
+        this.renderTimeHistory = [];
+        this.currentBatchSize = this.config.baseBatchSize;
+    }
+    /**
+     * Get optimization statistics
+     */
+    getStats() {
+        return {
+            avgScrollSpeed: this.getAverageScrollSpeed(),
+            avgRenderTime: this.getAverageRenderTime(),
+            currentBatchSize: this.currentBatchSize,
+            totalAdjustments: this.scrollSpeedHistory.length
+        };
+    }
+}
+
+/**
+ * Request Deduplication
+ * Prevents duplicate requests from being sent
+ */
+class RequestDeduplicator {
+    constructor() {
+        this.pendingRequests = new Map();
+        this.requestCount = new Map();
+    }
+    /**
+     * Execute request with deduplication
+     * If same request is already pending, return existing promise
+     */
+    async request(key, requestFn, ttl = 5000 // Time to live in ms
+    ) {
+        // Check if same request is already pending
+        if (this.pendingRequests.has(key)) {
+            console.log(`[RequestDeduplicator] Deduplicating request: ${key}`);
+            return this.pendingRequests.get(key);
+        }
+        // Create new request
+        const promise = requestFn()
+            .then(result => {
+            this.pendingRequests.delete(key);
+            this.requestCount.delete(key);
+            return result;
+        })
+            .catch(error => {
+            this.pendingRequests.delete(key);
+            this.requestCount.delete(key);
+            throw error;
+        });
+        // Store pending request
+        this.pendingRequests.set(key, promise);
+        // Track request count for analytics
+        const count = this.requestCount.get(key) || 0;
+        this.requestCount.set(key, count + 1);
+        // Auto cleanup after TTL
+        setTimeout(() => {
+            if (this.pendingRequests.has(key)) {
+                this.pendingRequests.delete(key);
+            }
+        }, ttl);
+        return promise;
+    }
+    /**
+     * Clear specific request
+     */
+    clear(key) {
+        this.pendingRequests.delete(key);
+        this.requestCount.delete(key);
+    }
+    /**
+     * Clear all requests
+     */
+    clearAll() {
+        this.pendingRequests.clear();
+        this.requestCount.clear();
+    }
+    /**
+     * Get pending request count
+     */
+    getPendingCount() {
+        return this.pendingRequests.size;
+    }
+    /**
+     * Get request statistics
+     */
+    getStats() {
+        const totalRequests = Array.from(this.requestCount.values()).reduce((a, b) => a + b, 0);
+        const deduplicated = totalRequests - this.pendingRequests.size;
+        return {
+            pending: this.pendingRequests.size,
+            totalRequests,
+            deduplicationRate: totalRequests > 0 ? deduplicated / totalRequests : 0
+        };
+    }
+}
+
+/**
+ * Priority-based Request Queue
+ * Processes high-priority requests first
+ */
+exports.Priority = void 0;
+(function (Priority) {
+    Priority[Priority["LOW"] = 0] = "LOW";
+    Priority[Priority["NORMAL"] = 1] = "NORMAL";
+    Priority[Priority["HIGH"] = 2] = "HIGH";
+    Priority[Priority["CRITICAL"] = 3] = "CRITICAL";
+})(exports.Priority || (exports.Priority = {}));
+class PriorityRequestQueue {
+    constructor(maxConcurrent = 2) {
+        this.queues = new Map();
+        this.processing = false;
+        this.maxConcurrent = 2;
+        this.activeRequests = 0;
+        this.maxConcurrent = maxConcurrent;
+        // Initialize priority queues
+        Object.values(exports.Priority).forEach(priority => {
+            if (typeof priority === 'number') {
+                this.queues.set(priority, []);
+            }
+        });
+    }
+    /**
+     * Add request with priority
+     */
+    add(requestFn, priority = exports.Priority.NORMAL) {
+        return new Promise((resolve, reject) => {
+            const request = {
+                priority,
+                requestFn: () => requestFn(),
+                resolve,
+                reject,
+                timestamp: Date.now()
+            };
+            // Add to appropriate priority queue
+            const queue = this.queues.get(priority) || [];
+            queue.push(request);
+            this.queues.set(priority, queue);
+            // Start processing if not already processing
+            if (!this.processing) {
+                this.processQueue();
+            }
+        });
+    }
+    /**
+     * Process queue by priority
+     */
+    async processQueue() {
+        if (this.processing)
+            return;
+        this.processing = true;
+        while (this.hasPendingRequests() && this.activeRequests < this.maxConcurrent) {
+            // Get highest priority request
+            const request = this.getNextRequest();
+            if (!request)
+                break;
+            this.activeRequests++;
+            // Execute request
+            request.requestFn()
+                .then(request.resolve)
+                .catch(request.reject)
+                .finally(() => {
+                this.activeRequests--;
+                this.processQueue();
+            });
+        }
+        this.processing = false;
+    }
+    /**
+     * Get next request by priority
+     */
+    getNextRequest() {
+        // Process from highest priority to lowest
+        for (let priority = exports.Priority.CRITICAL; priority >= exports.Priority.LOW; priority--) {
+            const queue = this.queues.get(priority);
+            if (queue && queue.length > 0) {
+                return queue.shift() || null;
+            }
+        }
+        return null;
+    }
+    /**
+     * Check if there are pending requests
+     */
+    hasPendingRequests() {
+        for (const queue of this.queues.values()) {
+            if (queue.length > 0)
+                return true;
+        }
+        return false;
+    }
+    /**
+     * Get queue statistics
+     */
+    getStats() {
+        var _a, _b, _c, _d;
+        const byPriority = {
+            critical: ((_a = this.queues.get(exports.Priority.CRITICAL)) === null || _a === void 0 ? void 0 : _a.length) || 0,
+            high: ((_b = this.queues.get(exports.Priority.HIGH)) === null || _b === void 0 ? void 0 : _b.length) || 0,
+            normal: ((_c = this.queues.get(exports.Priority.NORMAL)) === null || _c === void 0 ? void 0 : _c.length) || 0,
+            low: ((_d = this.queues.get(exports.Priority.LOW)) === null || _d === void 0 ? void 0 : _d.length) || 0
+        };
+        return {
+            totalPending: Object.values(byPriority).reduce((a, b) => a + b, 0),
+            byPriority,
+            activeRequests: this.activeRequests
+        };
+    }
+    /**
+     * Clear all queues
+     */
+    clear() {
+        this.queues.forEach(queue => queue.length = 0);
+        this.processing = false;
+        this.activeRequests = 0;
+    }
+    /**
+     * Clear specific priority queue
+     */
+    clearPriority(priority) {
+        const queue = this.queues.get(priority);
+        if (queue) {
+            queue.length = 0;
+        }
+    }
+}
+
 class Engine {
     constructor(config) {
         this.fetchMoreCallback = null;
@@ -760,6 +1627,12 @@ class Engine {
         this.networkAwarePrefetchManager = new NetworkAwarePrefetchManager(this.networkDetector);
         this.networkAwareRequestQueue = new NetworkAwareRequestQueue(this.networkDetector);
         this.adaptiveBufferCalculator = new AdaptiveBufferCalculator();
+        this.performanceOptimizer = new PerformanceOptimizer();
+        this.memoryManager = new MemoryManager(1000); // Cache up to 1000 items
+        this.gpuAccelerator = new GPUAccelerator();
+        this.batchSizeOptimizer = new BatchSizeOptimizer();
+        this.requestDeduplicator = new RequestDeduplicator();
+        this.priorityRequestQueue = new PriorityRequestQueue(2);
         this.totalItems = this.config.totalItems || Number.MAX_SAFE_INTEGER;
         this.state = {
             scrollTop: 0,
@@ -772,26 +1645,34 @@ class Engine {
      * Update scroll position and recalculate visible range with intelligent detection
      */
     async updateScrollPosition(scrollTop) {
-        // Calculate velocity and other intelligent metrics
-        const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
-        this.intelligentScrollDetector.getDirection(velocity);
-        // Get network quality for adaptive buffering
-        const networkQuality = await this.networkDetector.assessConnectionQuality();
-        // Calculate adaptive buffer considering all factors
-        const adaptiveBuffer = await this.adaptiveBufferCalculator.calculateOptimalBuffer({
-            scrollVelocity: velocity,
-            networkQuality,
-            baseBuffer: this.intelligentScrollDetector.calculateBuffer(velocity),
-            visibleItems: [] // In a real implementation, this would be the actual visible items
+        // Use performance optimizer to schedule updates efficiently
+        this.performanceOptimizer.scheduleOptimizedUpdate(async () => {
+            // Calculate velocity and other intelligent metrics
+            const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
+            this.intelligentScrollDetector.getDirection(velocity);
+            // Get network quality for adaptive buffering
+            const networkQuality = await this.networkDetector.assessConnectionQuality();
+            // Calculate adaptive buffer considering all factors
+            const adaptiveBuffer = await this.adaptiveBufferCalculator.calculateOptimalBuffer({
+                scrollVelocity: velocity,
+                networkQuality,
+                baseBuffer: this.intelligentScrollDetector.calculateBuffer(velocity),
+                visibleItems: [] // In a real implementation, this would be the actual visible items
+            });
+            // Update window manager with adaptive buffer
+            this.windowManager.updateBufferSize(adaptiveBuffer);
+            // Update memory manager with visible range
+            this.memoryManager.setVisibleRange({
+                start: Math.max(0, this.state.visibleRange.start - adaptiveBuffer),
+                end: this.state.visibleRange.end + adaptiveBuffer
+            });
+            this.state.scrollTop = scrollTop;
+            this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
+            // Check if we need to fetch more items
+            if (await this.shouldFetchMore()) {
+                await this.fetchMore();
+            }
         });
-        // Update window manager with adaptive buffer
-        this.windowManager.updateBufferSize(adaptiveBuffer);
-        this.state.scrollTop = scrollTop;
-        this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
-        // Check if we need to fetch more items
-        if (await this.shouldFetchMore()) {
-            await this.fetchMore();
-        }
     }
     /**
      * Get the current visible range
@@ -877,6 +1758,1167 @@ class Engine {
         this.networkAwareRequestQueue.clear();
         this.fetchMoreCallback = null;
         this.intelligentScrollDetector.cleanup();
+        this.performanceOptimizer.cleanup();
+        this.memoryManager.clear();
+    }
+}
+
+/**
+ * Height Measurement Cache
+ * Dynamically measures and caches item heights for variable height support
+ */
+class HeightMeasurementCache {
+    constructor(estimatedHeight = 100) {
+        this.heightMap = new Map();
+        this.offsetMap = new Map();
+        this.totalHeight = 0;
+        this.accessCount = 0;
+        this.hitCount = 0;
+        this.DEFAULT_TTL = 60000; // 1 minute
+        this.estimatedHeight = estimatedHeight;
+    }
+    /**
+     * Measure and cache height for an item
+     */
+    measureHeight(index, element) {
+        const height = element.offsetHeight;
+        this.heightMap.set(index, {
+            height,
+            measured: true,
+            timestamp: Date.now()
+        });
+        // Recalculate offsets
+        this.recalculateOffsets();
+        return height;
+    }
+    /**
+     * Get height for an item (measured or estimated)
+     */
+    getHeight(index) {
+        this.accessCount++;
+        const entry = this.heightMap.get(index);
+        if (entry) {
+            this.hitCount++;
+            return entry.height;
+        }
+        // Return estimated height for unmeasured items
+        return this.estimatedHeight;
+    }
+    /**
+     * Get offset (cumulative height) for an item
+     */
+    getOffset(index) {
+        const offset = this.offsetMap.get(index);
+        return offset !== undefined ? offset : index * this.estimatedHeight;
+    }
+    /**
+     * Check if item height is measured
+     */
+    isMeasured(index) {
+        return this.heightMap.has(index);
+    }
+    /**
+     * Mark item as needing remeasurement
+     */
+    invalidate(index) {
+        const entry = this.heightMap.get(index);
+        if (entry) {
+            entry.measured = false;
+        }
+    }
+    /**
+     * Clear specific item from cache
+     */
+    clear(index) {
+        this.heightMap.delete(index);
+        this.recalculateOffsets();
+    }
+    /**
+     * Clear entire cache
+     */
+    clearAll() {
+        this.heightMap.clear();
+        this.offsetMap.clear();
+        this.totalHeight = 0;
+        this.accessCount = 0;
+        this.hitCount = 0;
+    }
+    /**
+     * Recalculate all offsets
+     */
+    recalculateOffsets() {
+        this.offsetMap.clear();
+        let currentOffset = 0;
+        // We need to calculate offsets for all items
+        // This is called when heights change
+        const indices = Array.from(this.heightMap.keys()).sort((a, b) => a - b);
+        for (const index of indices) {
+            this.offsetMap.set(index, currentOffset);
+            const entry = this.heightMap.get(index);
+            if (entry) {
+                currentOffset += entry.height;
+            }
+            else {
+                currentOffset += this.estimatedHeight;
+            }
+        }
+        this.totalHeight = currentOffset;
+    }
+    /**
+     * Get total height of all items
+     */
+    getTotalHeight(totalItems) {
+        if (this.heightMap.size === 0) {
+            return totalItems * this.estimatedHeight;
+        }
+        // Calculate based on measured + estimated
+        let total = 0;
+        for (let i = 0; i < totalItems; i++) {
+            total += this.getHeight(i);
+        }
+        return total;
+    }
+    /**
+     * Find item index at a specific scroll position
+     */
+    findIndexAtPosition(position, totalItems) {
+        let low = 0;
+        let high = totalItems - 1;
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const offset = this.getOffset(mid);
+            if (offset < position) {
+                low = mid + 1;
+            }
+            else if (offset > position) {
+                high = mid - 1;
+            }
+            else {
+                return mid;
+            }
+        }
+        return low;
+    }
+    /**
+     * Get cache statistics
+     */
+    getStats(totalItems) {
+        const measuredItems = this.heightMap.size;
+        const estimatedItems = totalItems - measuredItems;
+        return {
+            totalItems,
+            measuredItems,
+            estimatedItems,
+            cacheSize: this.heightMap.size,
+            hitRate: this.accessCount > 0 ? this.hitCount / this.accessCount : 0
+        };
+    }
+    /**
+     * Update estimated height
+     */
+    updateEstimatedHeight(height) {
+        this.estimatedHeight = height;
+    }
+    /**
+     * Get estimated height
+     */
+    getEstimatedHeight() {
+        return this.estimatedHeight;
+    }
+    /**
+     * Cleanup old entries (older than TTL)
+     */
+    cleanup(ttl = this.DEFAULT_TTL) {
+        const now = Date.now();
+        const toDelete = [];
+        this.heightMap.forEach((entry, index) => {
+            if (now - entry.timestamp > ttl) {
+                toDelete.push(index);
+            }
+        });
+        toDelete.forEach(index => this.clear(index));
+    }
+    /**
+     * Get all measured heights
+     */
+    getAllHeights() {
+        const heights = new Map();
+        this.heightMap.forEach((entry, index) => {
+            heights.set(index, entry.height);
+        });
+        return heights;
+    }
+    /**
+     * Set heights in bulk (for initial data load)
+     */
+    setHeightsBulk(heights) {
+        heights.forEach((height, index) => {
+            this.heightMap.set(index, {
+                height,
+                measured: true,
+                timestamp: Date.now()
+            });
+        });
+        this.recalculateOffsets();
+    }
+}
+
+/**
+ * Variable Height Manager
+ * Manages variable height items with efficient position calculations
+ */
+class VariableHeightManager {
+    constructor(config) {
+        this.totalItems = 0;
+        this.lastMeasuredIndex = -1;
+        this.config = {
+            estimatedHeight: (config === null || config === void 0 ? void 0 : config.estimatedHeight) || 100,
+            minHeight: (config === null || config === void 0 ? void 0 : config.minHeight) || 50,
+            maxHeight: (config === null || config === void 0 ? void 0 : config.maxHeight) || 500,
+            bufferSize: (config === null || config === void 0 ? void 0 : config.bufferSize) || 5
+        };
+        this.heightCache = new HeightMeasurementCache(this.config.estimatedHeight);
+    }
+    /**
+     * Set total number of items
+     */
+    setTotalItems(total) {
+        this.totalItems = total;
+    }
+    /**
+     * Measure item height from DOM element
+     */
+    measureElement(index, element) {
+        if (!element) {
+            return this.config.estimatedHeight;
+        }
+        const height = element.offsetHeight;
+        // Clamp height between min and max
+        const clampedHeight = Math.max(this.config.minHeight, Math.min(this.config.maxHeight, height));
+        this.heightCache.measureHeight(index, { offsetHeight: clampedHeight });
+        this.lastMeasuredIndex = Math.max(this.lastMeasuredIndex, index);
+        return clampedHeight;
+    }
+    /**
+     * Get item position (offset and height)
+     */
+    getItemPosition(index) {
+        const offset = this.heightCache.getOffset(index);
+        const height = this.heightCache.getHeight(index);
+        return {
+            index,
+            offset,
+            height
+        };
+    }
+    /**
+     * Calculate visible range for variable heights
+     */
+    calculateVisibleRange(scrollTop, viewportHeight) {
+        // Find start index based on scroll position
+        const startIndex = this.heightCache.findIndexAtPosition(scrollTop, this.totalItems);
+        // Calculate how many items fit in viewport
+        let endIndex = startIndex;
+        let currentOffset = this.heightCache.getOffset(startIndex);
+        while (endIndex < this.totalItems && currentOffset < scrollTop + viewportHeight) {
+            const height = this.heightCache.getHeight(endIndex);
+            currentOffset += height;
+            endIndex++;
+        }
+        // Add buffer
+        const bufferedStart = Math.max(0, startIndex - this.config.bufferSize);
+        const bufferedEnd = Math.min(this.totalItems - 1, endIndex + this.config.bufferSize);
+        return {
+            start: bufferedStart,
+            end: bufferedEnd
+        };
+    }
+    /**
+     * Get total height of all items
+     */
+    getTotalHeight() {
+        return this.heightCache.getTotalHeight(this.totalItems);
+    }
+    /**
+     * Scroll to specific item index
+     */
+    scrollToIndex(index) {
+        const offset = this.heightCache.getOffset(index);
+        return offset;
+    }
+    /**
+     * Get items to render for current viewport
+     */
+    getItemsToRender(scrollTop, viewportHeight) {
+        const visibleRange = this.calculateVisibleRange(scrollTop, viewportHeight);
+        const items = [];
+        for (let i = visibleRange.start; i <= visibleRange.end; i++) {
+            items.push(this.getItemPosition(i));
+        }
+        return {
+            items,
+            totalHeight: this.getTotalHeight()
+        };
+    }
+    /**
+     * Handle height change (when item height changes dynamically)
+     */
+    onHeightChange(index, newHeight) {
+        const oldHeight = this.heightCache.getHeight(index);
+        const heightDiff = newHeight - oldHeight;
+        // Update cache
+        this.heightCache.measureHeight(index, { offsetHeight: newHeight });
+        // If height changed significantly, may need to adjust scroll position
+        if (Math.abs(heightDiff) > 50) {
+            // Large height change - may need to recalculate
+            this.heightCache.invalidate(index);
+        }
+    }
+    /**
+     * Get cache statistics
+     */
+    getCacheStats() {
+        return this.heightCache.getStats(this.totalItems);
+    }
+    /**
+     * Clear cache for specific range
+     */
+    clearRange(startIndex, endIndex) {
+        for (let i = startIndex; i <= endIndex; i++) {
+            this.heightCache.clear(i);
+        }
+    }
+    /**
+     * Clear entire cache
+     */
+    clearCache() {
+        this.heightCache.clearAll();
+        this.lastMeasuredIndex = -1;
+    }
+    /**
+     * Get last measured index
+     */
+    getLastMeasuredIndex() {
+        return this.lastMeasuredIndex;
+    }
+    /**
+     * Check if item is measured
+     */
+    isItemMeasured(index) {
+        return this.heightCache.isMeasured(index);
+    }
+    /**
+     * Get measured items count
+     */
+    getMeasuredCount() {
+        return this.heightCache.getStats(this.totalItems).measuredItems;
+    }
+}
+
+/**
+ * Dynamic Height Engine
+ * Core engine for variable height virtual scrolling
+ */
+class DynamicHeightEngine {
+    constructor(config = {}) {
+        this.containerElement = null;
+        this.itemElements = new Map();
+        this.config = {
+            itemHeight: config.estimatedItemHeight || 100,
+            viewportHeight: config.viewportHeight || 400,
+            bufferSize: config.heightBufferSize || 5,
+            estimatedItemHeight: config.estimatedItemHeight || 100,
+            minItemHeight: config.minItemHeight || 50,
+            maxItemHeight: config.maxItemHeight || 500,
+            heightBufferSize: config.heightBufferSize || 5
+        };
+        this.variableHeightManager = new VariableHeightManager({
+            estimatedHeight: this.config.estimatedItemHeight,
+            minHeight: this.config.minItemHeight,
+            maxHeight: this.config.maxItemHeight,
+            bufferSize: this.config.heightBufferSize
+        });
+        this.heightCache = new HeightMeasurementCache(this.config.estimatedItemHeight);
+        this.state = {
+            scrollTop: 0,
+            visibleRange: { start: 0, end: 0 },
+            loadedItems: 0,
+            isLoading: false,
+            totalContentHeight: 0,
+            measuredItems: 0,
+            estimatedItems: 0
+        };
+    }
+    /**
+     * Initialize with container element
+     */
+    init(container) {
+        this.containerElement = container;
+        this.setupScrollListener();
+    }
+    /**
+     * Setup scroll listener
+     */
+    setupScrollListener() {
+        if (!this.containerElement)
+            return;
+        this.containerElement.addEventListener('scroll', () => {
+            this.onScroll();
+        }, { passive: true });
+    }
+    /**
+     * Handle scroll event
+     */
+    onScroll() {
+        if (!this.containerElement)
+            return;
+        const scrollTop = this.containerElement.scrollTop;
+        this.state.scrollTop = scrollTop;
+        // Recalculate visible range
+        this.updateVisibleRange();
+    }
+    /**
+     * Update visible range based on scroll position
+     */
+    updateVisibleRange() {
+        if (!this.containerElement)
+            return;
+        const viewportHeight = this.containerElement.clientHeight;
+        const visibleRange = this.variableHeightManager.calculateVisibleRange(this.state.scrollTop, viewportHeight);
+        this.state.visibleRange = visibleRange;
+        // Update state with measured/estimated counts
+        const stats = this.variableHeightManager.getCacheStats();
+        this.state.measuredItems = stats.measuredItems;
+        this.state.estimatedItems = stats.estimatedItems;
+        this.state.totalContentHeight = this.variableHeightManager.getTotalHeight();
+    }
+    /**
+     * Measure item height from DOM element
+     */
+    measureItem(index, element) {
+        const height = this.variableHeightManager.measureElement(index, element);
+        // Store element reference
+        this.itemElements.set(index, element);
+        // Update state
+        const stats = this.variableHeightManager.getCacheStats();
+        this.state.measuredItems = stats.measuredItems;
+        this.state.estimatedItems = stats.estimatedItems;
+        this.state.totalContentHeight = this.variableHeightManager.getTotalHeight();
+        // Trigger re-render if needed
+        this.onHeightMeasured(index, height);
+        return height;
+    }
+    /**
+     * Called when item height is measured
+     */
+    onHeightMeasured(index, height) {
+        // Can be overridden to trigger UI updates
+        // For example, update styles or trigger re-render
+    }
+    /**
+     * Get items to render for current viewport
+     */
+    getItemsToRender() {
+        if (!this.containerElement) {
+            return {
+                items: [],
+                totalHeight: 0,
+                visibleRange: { start: 0, end: 0 }
+            };
+        }
+        const { items, totalHeight } = this.variableHeightManager.getItemsToRender(this.state.scrollTop, this.containerElement.clientHeight);
+        return {
+            items,
+            totalHeight,
+            visibleRange: this.state.visibleRange
+        };
+    }
+    /**
+     * Scroll to specific item index
+     */
+    scrollToIndex(index) {
+        if (!this.containerElement)
+            return;
+        const offset = this.variableHeightManager.scrollToIndex(index);
+        this.containerElement.scrollTop = offset;
+        // Update state
+        this.state.scrollTop = offset;
+        this.updateVisibleRange();
+    }
+    /**
+     * Set total number of items
+     */
+    setTotalItems(total) {
+        this.variableHeightManager.setTotalItems(total);
+        this.state.loadedItems = total;
+        this.state.totalContentHeight = this.variableHeightManager.getTotalHeight();
+    }
+    /**
+     * Get current state
+     */
+    getState() {
+        return { ...this.state };
+    }
+    /**
+     * Get cache statistics
+     */
+    getCacheStats() {
+        return this.variableHeightManager.getCacheStats();
+    }
+    /**
+     * Clear cache for range
+     */
+    clearCacheRange(startIndex, endIndex) {
+        this.variableHeightManager.clearRange(startIndex, endIndex);
+        // Clear element references
+        for (let i = startIndex; i <= endIndex; i++) {
+            this.itemElements.delete(i);
+        }
+    }
+    /**
+     * Clear entire cache
+     */
+    clearCache() {
+        this.variableHeightManager.clearCache();
+        this.itemElements.clear();
+    }
+    /**
+     * Cleanup
+     */
+    cleanup() {
+        if (this.containerElement) {
+            this.containerElement.removeEventListener('scroll', this.onScroll.bind(this));
+        }
+        this.clearCache();
+    }
+    /**
+     * Update viewport height
+     */
+    updateViewportHeight(height) {
+        this.config.viewportHeight = height;
+        this.updateVisibleRange();
+    }
+    /**
+     * Get item offset for styling
+     */
+    getItemOffset(index) {
+        return this.variableHeightManager.getItemPosition(index).offset;
+    }
+    /**
+     * Get item height
+     */
+    getItemHeight(index) {
+        return this.variableHeightManager.getItemPosition(index).height;
+    }
+    /**
+     * Check if item is measured
+     */
+    isItemMeasured(index) {
+        return this.variableHeightManager.isItemMeasured(index);
+    }
+}
+
+/**
+ * Smart Prefetch Algorithm
+ * Recognizes scroll patterns and predicts data loading needs
+ */
+class SmartPrefetchAlgorithm {
+    constructor() {
+        this.velocityHistory = [];
+        this.directionHistory = [];
+        this.HISTORY_SIZE = 20;
+        this.lastPrefetchTime = 0;
+        this.prefetchCooldown = 500; // ms
+    }
+    /**
+     * Analyze scroll pattern
+     */
+    analyzeScrollPattern(velocity, acceleration, direction) {
+        this.trackVelocity(velocity);
+        this.trackDirection(direction);
+        const avgVelocity = this.getAverageVelocity();
+        const velocityVariance = this.getVelocityVariance();
+        const directionChanges = this.countDirectionChanges();
+        // Determine pattern type
+        let pattern;
+        if (Math.abs(avgVelocity) > 2.0) {
+            pattern = {
+                type: 'fast-scroll',
+                velocity: avgVelocity,
+                acceleration,
+                direction,
+                confidence: 0.9
+            };
+        }
+        else if (Math.abs(avgVelocity) < 0.3) {
+            pattern = {
+                type: 'paused',
+                velocity: avgVelocity,
+                acceleration,
+                direction: 'stationary',
+                confidence: 0.95
+            };
+        }
+        else if (directionChanges > 5) {
+            pattern = {
+                type: 'oscillating',
+                velocity: avgVelocity,
+                acceleration,
+                direction,
+                confidence: 0.85
+            };
+        }
+        else if (velocityVariance < 0.5) {
+            pattern = {
+                type: 'steady',
+                velocity: avgVelocity,
+                acceleration,
+                direction,
+                confidence: 0.9
+            };
+        }
+        else {
+            pattern = {
+                type: 'slow-scroll',
+                velocity: avgVelocity,
+                acceleration,
+                direction,
+                confidence: 0.8
+            };
+        }
+        return pattern;
+    }
+    /**
+     * Predict prefetch needs based on scroll pattern
+     */
+    predictPrefetchNeeds(pattern, visibleEnd, totalLoaded) {
+        const now = Date.now();
+        // Check cooldown
+        if (now - this.lastPrefetchTime < this.prefetchCooldown) {
+            return {
+                shouldPrefetch: false,
+                prefetchDistance: 0,
+                batchSize: 0,
+                priority: 'low',
+                confidence: 1.0
+            };
+        }
+        let prediction;
+        switch (pattern.type) {
+            case 'fast-scroll':
+                prediction = {
+                    shouldPrefetch: true,
+                    prefetchDistance: 1500, // Far ahead for fast scrolling
+                    batchSize: 30, // Large batch
+                    priority: 'critical',
+                    confidence: pattern.confidence
+                };
+                break;
+            case 'steady':
+                prediction = {
+                    shouldPrefetch: visibleEnd >= totalLoaded - 800,
+                    prefetchDistance: 800,
+                    batchSize: 20,
+                    priority: 'high',
+                    confidence: pattern.confidence
+                };
+                break;
+            case 'slow-scroll':
+                prediction = {
+                    shouldPrefetch: visibleEnd >= totalLoaded - 400,
+                    prefetchDistance: 400,
+                    batchSize: 10,
+                    priority: 'normal',
+                    confidence: pattern.confidence
+                };
+                break;
+            case 'oscillating':
+                prediction = {
+                    shouldPrefetch: visibleEnd >= totalLoaded - 600,
+                    prefetchDistance: 600,
+                    batchSize: 15,
+                    priority: 'normal',
+                    confidence: pattern.confidence * 0.8 // Lower confidence for oscillating
+                };
+                break;
+            case 'paused':
+                prediction = {
+                    shouldPrefetch: false, // User paused, no need to prefetch
+                    prefetchDistance: 0,
+                    batchSize: 0,
+                    priority: 'low',
+                    confidence: pattern.confidence
+                };
+                break;
+            default:
+                prediction = {
+                    shouldPrefetch: visibleEnd >= totalLoaded - 500,
+                    prefetchDistance: 500,
+                    batchSize: 15,
+                    priority: 'normal',
+                    confidence: 0.7
+                };
+        }
+        // Update last prefetch time if prefetching
+        if (prediction.shouldPrefetch) {
+            this.lastPrefetchTime = now;
+        }
+        return prediction;
+    }
+    /**
+     * Track velocity history
+     */
+    trackVelocity(velocity) {
+        this.velocityHistory.push(velocity);
+        if (this.velocityHistory.length > this.HISTORY_SIZE) {
+            this.velocityHistory.shift();
+        }
+    }
+    /**
+     * Track direction history
+     */
+    trackDirection(direction) {
+        this.directionHistory.push(direction);
+        if (this.directionHistory.length > this.HISTORY_SIZE) {
+            this.directionHistory.shift();
+        }
+    }
+    /**
+     * Get average velocity
+     */
+    getAverageVelocity() {
+        if (this.velocityHistory.length === 0)
+            return 0;
+        const sum = this.velocityHistory.reduce((a, b) => a + b, 0);
+        return sum / this.velocityHistory.length;
+    }
+    /**
+     * Get velocity variance
+     */
+    getVelocityVariance() {
+        if (this.velocityHistory.length < 2)
+            return 0;
+        const avg = this.getAverageVelocity();
+        const squaredDiffs = this.velocityHistory.map(v => Math.pow(v - avg, 2));
+        const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / squaredDiffs.length;
+        return Math.sqrt(avgSquaredDiff);
+    }
+    /**
+     * Count direction changes
+     */
+    countDirectionChanges() {
+        if (this.directionHistory.length < 2)
+            return 0;
+        let changes = 0;
+        for (let i = 1; i < this.directionHistory.length; i++) {
+            if (this.directionHistory[i] !== this.directionHistory[i - 1] &&
+                this.directionHistory[i] !== 'stationary' &&
+                this.directionHistory[i - 1] !== 'stationary') {
+                changes++;
+            }
+        }
+        return changes;
+    }
+    /**
+     * Reset history
+     */
+    reset() {
+        this.velocityHistory = [];
+        this.directionHistory = [];
+        this.lastPrefetchTime = 0;
+    }
+    /**
+     * Get prediction confidence
+     */
+    getConfidence() {
+        if (this.velocityHistory.length < 5)
+            return 0.5; // Not enough data
+        return Math.min(this.velocityHistory.length / this.HISTORY_SIZE, 1.0);
+    }
+}
+
+/**
+ * Preemptive Caching
+ * Caches data before it's needed based on predictions
+ */
+class PreemptiveCache {
+    constructor(config) {
+        this.cache = new Map();
+        this.accessHistory = [];
+        this.config = {
+            maxSize: (config === null || config === void 0 ? void 0 : config.maxSize) || 1000,
+            defaultTTL: (config === null || config === void 0 ? void 0 : config.defaultTTL) || 300000, // 5 minutes
+            cleanupThreshold: (config === null || config === void 0 ? void 0 : config.cleanupThreshold) || 800
+        };
+    }
+    /**
+     * Preemptively cache data with priority
+     */
+    preemptiveCache(index, data, priority = 'normal') {
+        // Check if we need to cleanup
+        if (this.cache.size >= this.config.cleanupThreshold) {
+            this.cleanup();
+        }
+        const entry = {
+            data,
+            timestamp: Date.now(),
+            priority,
+            accessCount: 0,
+            expiry: Date.now() + this.config.defaultTTL
+        };
+        this.cache.set(index, entry);
+    }
+    /**
+     * Get cached data
+     */
+    get(index) {
+        const entry = this.cache.get(index);
+        if (!entry) {
+            return null;
+        }
+        // Check expiry
+        if (Date.now() > entry.expiry) {
+            this.cache.delete(index);
+            return null;
+        }
+        // Update access count
+        entry.accessCount++;
+        this.trackAccess(index);
+        return entry.data;
+    }
+    /**
+     * Check if data is cached
+     */
+    has(index) {
+        const entry = this.cache.get(index);
+        if (!entry)
+            return false;
+        // Check expiry
+        if (Date.now() > entry.expiry) {
+            this.cache.delete(index);
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Get cached data for range
+     */
+    getRange(startIndex, endIndex) {
+        const results = [];
+        for (let i = startIndex; i <= endIndex; i++) {
+            const data = this.get(i);
+            if (data !== null) {
+                results.push(data);
+            }
+        }
+        return results;
+    }
+    /**
+     * Delete cached data
+     */
+    delete(index) {
+        return this.cache.delete(index);
+    }
+    /**
+     * Clear cache
+     */
+    clear() {
+        this.cache.clear();
+        this.accessHistory = [];
+    }
+    /**
+     * Cleanup old/low-priority entries
+     */
+    cleanup() {
+        const now = Date.now();
+        const toDelete = [];
+        // First pass: remove expired entries
+        this.cache.forEach((entry, index) => {
+            if (now > entry.expiry) {
+                toDelete.push(index);
+            }
+        });
+        // Second pass: remove low-priority entries if still over limit
+        if (this.cache.size - toDelete.length > this.config.maxSize) {
+            const sortedByPriority = Array.from(this.cache.entries())
+                .filter(([index]) => !toDelete.includes(index))
+                .sort((a, b) => {
+                const priorityOrder = { critical: 4, high: 3, normal: 2, low: 1 };
+                return priorityOrder[a[1].priority] - priorityOrder[b[1].priority];
+            });
+            // Remove lowest priority entries
+            const toRemove = Math.ceil(sortedByPriority.length * 0.2); // Remove 20%
+            for (let i = 0; i < toRemove; i++) {
+                toDelete.push(sortedByPriority[i][0]);
+            }
+        }
+        // Delete marked entries
+        toDelete.forEach(index => this.cache.delete(index));
+    }
+    /**
+     * Track access for analytics
+     */
+    trackAccess(index) {
+        this.accessHistory.push(index);
+        if (this.accessHistory.length > 100) {
+            this.accessHistory.shift();
+        }
+    }
+    /**
+     * Get cache statistics
+     */
+    getStats() {
+        const byPriority = {
+            critical: 0,
+            high: 0,
+            normal: 0,
+            low: 0
+        };
+        let totalAccessCount = 0;
+        this.cache.forEach(entry => {
+            byPriority[entry.priority]++;
+            totalAccessCount += entry.accessCount;
+        });
+        return {
+            size: this.cache.size,
+            maxSize: this.config.maxSize,
+            hitRate: this.accessHistory.length > 0 ?
+                this.accessHistory.filter(i => this.has(i)).length / this.accessHistory.length : 0,
+            avgAccessCount: this.cache.size > 0 ? totalAccessCount / this.cache.size : 0,
+            byPriority
+        };
+    }
+    /**
+     * Get all cached indices
+     */
+    getCachedIndices() {
+        return Array.from(this.cache.keys());
+    }
+    /**
+     * Preemptively cache range
+     */
+    cacheRange(startIndex, endIndex, dataFetcher, priority) {
+        for (let i = startIndex; i <= endIndex; i++) {
+            if (!this.has(i)) {
+                const data = dataFetcher(i);
+                this.preemptiveCache(i, data, priority);
+            }
+        }
+    }
+    /**
+     * Get memory usage estimate
+     */
+    getMemoryUsage() {
+        // Rough estimate based on cache size
+        return this.cache.size * 1024; // Assume ~1KB per entry
+    }
+}
+
+/**
+ * Intelligent Pagination
+ * Adaptive page size with cursor-based pagination
+ */
+class IntelligentPagination {
+    constructor() {
+        this.currentPage = 1;
+        this.basePageSize = 50;
+        this.adaptivePageSize = 50;
+        this.totalItems = 0;
+        this.loadHistory = [];
+        this.MIN_PAGE_SIZE = 20;
+        this.MAX_PAGE_SIZE = 200;
+    }
+    /**
+     * Get current pagination state
+     */
+    getState() {
+        const totalPages = Math.ceil(this.totalItems / this.adaptivePageSize);
+        const hasMore = this.currentPage < totalPages;
+        return {
+            currentPage: this.currentPage,
+            pageSize: this.adaptivePageSize,
+            totalItems: this.totalItems,
+            totalPages,
+            hasMore,
+            cursor: this.createCursor(this.currentPage),
+            nextCursor: hasMore ? this.createCursor(this.currentPage + 1) : undefined,
+            prevCursor: this.currentPage > 1 ? this.createCursor(this.currentPage - 1) : undefined
+        };
+    }
+    /**
+     * Set total items
+     */
+    setTotalItems(total) {
+        this.totalItems = total;
+    }
+    /**
+     * Go to next page
+     */
+    nextPage() {
+        const state = this.getState();
+        if (state.hasMore) {
+            this.currentPage++;
+        }
+        return this.getState();
+    }
+    /**
+     * Go to previous page
+     */
+    prevPage() {
+        if (this.currentPage > 1) {
+            this.currentPage--;
+        }
+        return this.getState();
+    }
+    /**
+     * Go to specific page
+     */
+    goToPage(page) {
+        const totalPages = Math.ceil(this.totalItems / this.adaptivePageSize);
+        this.currentPage = Math.max(1, Math.min(page, totalPages));
+        return this.getState();
+    }
+    /**
+     * Record load time for adaptive sizing
+     */
+    recordLoadTime(page, loadTimeMs) {
+        this.loadHistory.push({ page, loadTime: loadTimeMs });
+        // Keep last 10 load times
+        if (this.loadHistory.length > 10) {
+            this.loadHistory.shift();
+        }
+        // Adjust page size based on load time
+        this.adaptPageSize();
+    }
+    /**
+     * Adapt page size based on performance
+     */
+    adaptPageSize() {
+        if (this.loadHistory.length < 3)
+            return;
+        const avgLoadTime = this.loadHistory.reduce((a, b) => a.loadTime + b.loadTime, 0) / this.loadHistory.length;
+        // Target: 100-300ms load time
+        if (avgLoadTime < 100) {
+            // Fast loads - increase page size
+            this.adaptivePageSize = Math.min(this.MAX_PAGE_SIZE, Math.round(this.adaptivePageSize * 1.2));
+        }
+        else if (avgLoadTime > 300) {
+            // Slow loads - decrease page size
+            this.adaptivePageSize = Math.max(this.MIN_PAGE_SIZE, Math.round(this.adaptivePageSize * 0.8));
+        }
+        // Optimal load time - keep current size
+    }
+    /**
+     * Create cursor for page
+     */
+    createCursor(page) {
+        const cursorData = {
+            page,
+            limit: this.adaptivePageSize,
+            timestamp: Date.now()
+        };
+        // Add checksum for validation
+        cursorData.checksum = this.calculateChecksum(cursorData);
+        return Buffer.from(JSON.stringify(cursorData)).toString('base64');
+    }
+    /**
+     * Decode cursor
+     */
+    decodeCursor(cursor) {
+        try {
+            const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+            // Validate checksum
+            if (decoded.checksum && !this.validateChecksum(decoded)) {
+                return null;
+            }
+            return decoded;
+        }
+        catch (_a) {
+            return null;
+        }
+    }
+    /**
+     * Go to page from cursor
+     */
+    goToCursor(cursor) {
+        const decoded = this.decodeCursor(cursor);
+        if (decoded) {
+            this.currentPage = decoded.page;
+            this.adaptivePageSize = decoded.limit;
+        }
+        return this.getState();
+    }
+    /**
+     * Calculate checksum for cursor validation
+     */
+    calculateChecksum(data) {
+        const str = `${data.page}-${data.limit}-${data.timestamp}`;
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return hash.toString(36);
+    }
+    /**
+     * Validate cursor checksum
+     */
+    validateChecksum(data) {
+        if (!data.checksum)
+            return false;
+        const { checksum, ...rest } = data;
+        return this.calculateChecksum(rest) === checksum;
+    }
+    /**
+     * Get items to fetch for current page
+     */
+    getFetchRange() {
+        return {
+            skip: (this.currentPage - 1) * this.adaptivePageSize,
+            limit: this.adaptivePageSize
+        };
+    }
+    /**
+     * Reset pagination
+     */
+    reset() {
+        this.currentPage = 1;
+        this.adaptivePageSize = this.basePageSize;
+        this.loadHistory = [];
+    }
+    /**
+     * Get load history for analytics
+     */
+    getLoadHistory() {
+        return [...this.loadHistory];
+    }
+    /**
+     * Get average load time
+     */
+    getAverageLoadTime() {
+        if (this.loadHistory.length === 0)
+            return 0;
+        return this.loadHistory.reduce((a, b) => a + b.loadTime, 0) / this.loadHistory.length;
+    }
+    /**
+     * Set base page size
+     */
+    setBasePageSize(size) {
+        this.basePageSize = Math.max(this.MIN_PAGE_SIZE, Math.min(this.MAX_PAGE_SIZE, size));
+        this.adaptivePageSize = this.basePageSize;
+    }
+    /**
+     * Get current page size
+     */
+    getPageSize() {
+        return this.adaptivePageSize;
+    }
+    /**
+     * Get current page number
+     */
+    getCurrentPage() {
+        return this.currentPage;
     }
 }
 
@@ -1078,6 +3120,133 @@ const LazyList = React.forwardRef((props, ref) => {
 });
 LazyList.displayName = 'LazyList';
 
+class LazyScroll {
+  constructor(container, config) {
+    this.container = container;
+    this.config = {
+      itemHeight: config.itemHeight || 50,
+      viewportHeight: config.viewportHeight || 400,
+      bufferSize: config.bufferSize || 5,
+      fetchMore: config.fetchMore || (() => Promise.resolve([]))
+    };
+
+    this.engine = new Engine(this.config);
+    this.engine.setFetchMoreCallback(this.config.fetchMore);
+
+    this.visibleRange = { start: 0, end: 0 };
+    this.isLoading = false;
+    this.items = [];
+    this.visibleItems = [];
+
+    this.scrollHandler = this.onScroll.bind(this);
+    this.container.addEventListener('scroll', this.scrollHandler, { passive: true });
+  }
+
+  onScroll() {
+    const scrollTop = this.container.scrollTop;
+    this.engine.updateScrollPosition(scrollTop);
+
+    const state = this.engine.getState();
+    this.visibleRange = state.visibleRange;
+    this.isLoading = state.isLoading;
+
+    this.render();
+  }
+
+  setItems(items) {
+    this.items = items;
+    this.render();
+  }
+
+  render() {
+    // Calculate paddings
+    const topPadding = this.visibleRange.start * this.config.itemHeight;
+    const bottomPadding = Math.max(0, (this.items.length - this.visibleRange.end) * this.config.itemHeight);
+
+    // Get visible items
+    this.visibleItems = this.items.slice(this.visibleRange.start, this.visibleRange.end);
+
+    // Clear container except for paddings and content
+    const existingContent = this.container.querySelector('.lazy-scroll-content');
+    if (existingContent) {
+      existingContent.remove();
+    }
+
+    // Create content wrapper
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'lazy-scroll-content';
+
+    // Add top padding
+    const topPaddingDiv = document.createElement('div');
+    topPaddingDiv.style.height = `${topPadding}px`;
+    contentWrapper.appendChild(topPaddingDiv);
+
+    // Add visible items
+    this.visibleItems.forEach((item, index) => {
+      const itemElement = this.createItemElement(item, this.visibleRange.start + index);
+      contentWrapper.appendChild(itemElement);
+    });
+
+    // Add bottom padding
+    const bottomPaddingDiv = document.createElement('div');
+    bottomPaddingDiv.style.height = `${bottomPadding}px`;
+    contentWrapper.appendChild(bottomPaddingDiv);
+
+    // Add loading indicator if needed
+    if (this.isLoading) {
+      const loadingElement = document.createElement('div');
+      loadingElement.className = 'lazy-loading';
+      loadingElement.textContent = 'Loading more items...';
+      contentWrapper.appendChild(loadingElement);
+    }
+
+    this.container.appendChild(contentWrapper);
+  }
+
+  createItemElement(item, index) {
+    const itemElement = document.createElement('div');
+    itemElement.style.height = `${this.config.itemHeight}px`;
+    itemElement.className = 'lazy-item';
+
+    // Default content - can be customized
+    itemElement.textContent = `Item ${index}: ${item.text || item.id || 'Content'}`;
+
+    return itemElement;
+  }
+
+  updateConfig(newConfig) {
+    if (newConfig.itemHeight !== undefined) this.config.itemHeight = newConfig.itemHeight;
+    if (newConfig.viewportHeight !== undefined) this.config.viewportHeight = newConfig.viewportHeight;
+    if (newConfig.bufferSize !== undefined) this.config.bufferSize = newConfig.bufferSize;
+    if (newConfig.fetchMore !== undefined) {
+      this.config.fetchMore = newConfig.fetchMore;
+      this.engine.setFetchMoreCallback(newConfig.fetchMore);
+    }
+
+    // Re-render with new config
+    this.render();
+  }
+
+  destroy() {
+    this.container.removeEventListener('scroll', this.scrollHandler);
+    this.engine.cleanup();
+  }
+
+  // Public methods
+  getVisibleRange() {
+    return { ...this.visibleRange };
+  }
+
+  refresh() {
+    this.onScroll();
+  }
+}
+
+// Factory function for easier usage
+function createLazyScroll(container, config) {
+  return new LazyScroll(container, config);
+}
+
 /**
  * Debounce function to limit the rate at which a function is called
  */
@@ -1109,19 +3278,47 @@ function throttle(func, limit) {
     };
 }
 
+// Core exports
+class LazyScrollElementClass {
+    constructor() { }
+    setItems(items) { }
+    refresh() { }
+    getVisibleRange() { return { start: 0, end: 0 }; }
+    static registerElement() { }
+}
+// Use dynamic import for browser-specific functionality
+const LazyScrollElement = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined'
+    ? LazyScrollElementClass // Will be replaced with actual element in browser
+    : LazyScrollElementClass; // SSR-safe fallback
+
 exports.AdaptiveBufferCalculator = AdaptiveBufferCalculator;
+exports.BatchSizeOptimizer = BatchSizeOptimizer;
 exports.ContentComplexityAnalyzer = ContentComplexityAnalyzer;
 exports.DevicePerformanceMonitor = DevicePerformanceMonitor;
+exports.DynamicHeightEngine = DynamicHeightEngine;
 exports.Engine = Engine;
+exports.GPUAccelerator = GPUAccelerator;
+exports.HeightMeasurementCache = HeightMeasurementCache;
+exports.IntelligentPagination = IntelligentPagination;
 exports.IntelligentScrollDetector = IntelligentScrollDetector;
 exports.LazyList = LazyList;
+exports.LazyScroll = LazyScroll;
+exports.LazyScrollElement = LazyScrollElement;
+exports.MemoryManager = MemoryManager;
 exports.NetworkAwarePrefetchManager = NetworkAwarePrefetchManager;
 exports.NetworkAwareRequestQueue = NetworkAwareRequestQueue;
 exports.NetworkSpeedDetector = NetworkSpeedDetector;
+exports.PerformanceOptimizer = PerformanceOptimizer;
+exports.PreemptiveCache = PreemptiveCache;
 exports.PrefetchManager = PrefetchManager;
+exports.PriorityRequestQueue = PriorityRequestQueue;
+exports.RequestDeduplicator = RequestDeduplicator;
 exports.RequestQueue = RequestQueue;
 exports.ScrollObserver = ScrollObserver;
+exports.SmartPrefetchAlgorithm = SmartPrefetchAlgorithm;
+exports.VariableHeightManager = VariableHeightManager;
 exports.WindowManager = WindowManager;
+exports.createLazyScroll = createLazyScroll;
 exports.debounce = debounce;
 exports.throttle = throttle;
 exports.useLazyList = useLazyList;

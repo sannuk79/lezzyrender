@@ -7,6 +7,12 @@ import { NetworkSpeedDetector } from './NetworkSpeedDetector';
 import { NetworkAwarePrefetchManager } from './NetworkAwarePrefetchManager';
 import { NetworkAwareRequestQueue } from './NetworkAwareRequestQueue';
 import { AdaptiveBufferCalculator } from './AdaptiveBufferCalculator';
+import { PerformanceOptimizer } from './PerformanceOptimizer';
+import { MemoryManager } from './MemoryManager';
+import { GPUAccelerator } from './GPUAccelerator';
+import { BatchSizeOptimizer } from './BatchSizeOptimizer';
+import { RequestDeduplicator } from './RequestDeduplicator';
+import { PriorityRequestQueue, Priority } from './PriorityRequestQueue';
 
 export class Engine {
   private config: EngineConfig;
@@ -18,6 +24,12 @@ export class Engine {
   private networkAwarePrefetchManager: NetworkAwarePrefetchManager;
   private networkAwareRequestQueue: NetworkAwareRequestQueue;
   private adaptiveBufferCalculator: AdaptiveBufferCalculator;
+  private performanceOptimizer: PerformanceOptimizer;
+  private memoryManager: MemoryManager;
+  private gpuAccelerator: GPUAccelerator;
+  private batchSizeOptimizer: BatchSizeOptimizer;
+  private requestDeduplicator: RequestDeduplicator;
+  private priorityRequestQueue: PriorityRequestQueue;
   
   private state: EngineState;
   private fetchMoreCallback: FetchMoreCallback | null = null;
@@ -42,6 +54,12 @@ export class Engine {
     this.networkAwarePrefetchManager = new NetworkAwarePrefetchManager(this.networkDetector);
     this.networkAwareRequestQueue = new NetworkAwareRequestQueue(this.networkDetector);
     this.adaptiveBufferCalculator = new AdaptiveBufferCalculator();
+    this.performanceOptimizer = new PerformanceOptimizer();
+    this.memoryManager = new MemoryManager(1000); // Cache up to 1000 items
+    this.gpuAccelerator = new GPUAccelerator();
+    this.batchSizeOptimizer = new BatchSizeOptimizer();
+    this.requestDeduplicator = new RequestDeduplicator();
+    this.priorityRequestQueue = new PriorityRequestQueue(2);
     
     this.totalItems = this.config.totalItems || Number.MAX_SAFE_INTEGER;
     
@@ -57,31 +75,40 @@ export class Engine {
    * Update scroll position and recalculate visible range with intelligent detection
    */
   async updateScrollPosition(scrollTop: number): Promise<void> {
-    // Calculate velocity and other intelligent metrics
-    const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
-    const direction = this.intelligentScrollDetector.getDirection(velocity);
-    
-    // Get network quality for adaptive buffering
-    const networkQuality = await this.networkDetector.assessConnectionQuality();
-    
-    // Calculate adaptive buffer considering all factors
-    const adaptiveBuffer = await this.adaptiveBufferCalculator.calculateOptimalBuffer({
-      scrollVelocity: velocity,
-      networkQuality,
-      baseBuffer: this.intelligentScrollDetector.calculateBuffer(velocity),
-      visibleItems: [] // In a real implementation, this would be the actual visible items
+    // Use performance optimizer to schedule updates efficiently
+    this.performanceOptimizer.scheduleOptimizedUpdate(async () => {
+      // Calculate velocity and other intelligent metrics
+      const velocity = this.intelligentScrollDetector.calculateVelocity(scrollTop);
+      const direction = this.intelligentScrollDetector.getDirection(velocity);
+      
+      // Get network quality for adaptive buffering
+      const networkQuality = await this.networkDetector.assessConnectionQuality();
+      
+      // Calculate adaptive buffer considering all factors
+      const adaptiveBuffer = await this.adaptiveBufferCalculator.calculateOptimalBuffer({
+        scrollVelocity: velocity,
+        networkQuality,
+        baseBuffer: this.intelligentScrollDetector.calculateBuffer(velocity),
+        visibleItems: [] // In a real implementation, this would be the actual visible items
+      });
+      
+      // Update window manager with adaptive buffer
+      this.windowManager.updateBufferSize(adaptiveBuffer);
+      
+      // Update memory manager with visible range
+      this.memoryManager.setVisibleRange({
+        start: Math.max(0, this.state.visibleRange.start - adaptiveBuffer),
+        end: this.state.visibleRange.end + adaptiveBuffer
+      });
+      
+      this.state.scrollTop = scrollTop;
+      this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
+      
+      // Check if we need to fetch more items
+      if (await this.shouldFetchMore()) {
+        await this.fetchMore();
+      }
     });
-    
-    // Update window manager with adaptive buffer
-    this.windowManager.updateBufferSize(adaptiveBuffer);
-    
-    this.state.scrollTop = scrollTop;
-    this.state.visibleRange = this.windowManager.calculateVisibleRange(scrollTop);
-    
-    // Check if we need to fetch more items
-    if (await this.shouldFetchMore()) {
-      await this.fetchMore();
-    }
   }
 
   /**
@@ -177,5 +204,7 @@ export class Engine {
     this.networkAwareRequestQueue.clear();
     this.fetchMoreCallback = null;
     this.intelligentScrollDetector.cleanup();
+    this.performanceOptimizer.cleanup();
+    this.memoryManager.clear();
   }
 }

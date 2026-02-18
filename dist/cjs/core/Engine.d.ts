@@ -9,6 +9,12 @@ export declare class Engine {
     private networkAwarePrefetchManager;
     private networkAwareRequestQueue;
     private adaptiveBufferCalculator;
+    private performanceOptimizer;
+    private memoryManager;
+    private gpuAccelerator;
+    private batchSizeOptimizer;
+    private requestDeduplicator;
+    private priorityRequestQueue;
     private state;
     private fetchMoreCallback;
     private totalItems;

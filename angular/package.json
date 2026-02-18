@@ -1,0 +1,7 @@
+{
+  "name": "lazy-render-virtual-scroll/angular",
+  "private": true,
+  "main": "../dist/cjs/angular/index.js",
+  "module": "../dist/esm/angular/index.js",
+  "types": "../dist/angular/index.d.ts"
+}
