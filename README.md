@@ -58,5 +58,5 @@ import { IntelligentLazyList, AdaptiveScrollView, SmartInfiniteScroll } from 'la
 See [GitHub](https://github.com/sannuk79/lezzyrender) for full documentation.
 
 ## License
-
+## Official Website: https://www.codeevaai.com/
 MIT
